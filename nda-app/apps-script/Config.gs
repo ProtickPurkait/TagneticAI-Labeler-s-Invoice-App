@@ -1,20 +1,20 @@
 /**
- * Everything you are likely to change lives here.
+ * Everything you are likely to change lives here. The NDA's wording lives in NdaTemplate.html.
  * After editing, redeploy: Deploy > Manage deployments > (pencil) > Version: New version.
  */
 const CONFIG = {
-  // Party disclosing the information (printed on the NDA).
+  // Short name used on the portal, in emails and for the Drive folder names.
   COMPANY_NAME: 'TagneticAI',
-  COMPANY_ADDRESS: 'F/NO-1 A MAINAK APT, GROUND FLOOR C/F-10/1, JYANGRA GHOSPARA, KOL- 59 NORTH 24 PARGANAS 700059, WB, India',
-  COMPANY_PHONE: '+91 7003411010',
 
-  // Printed under the company's signature line. Leave the name blank to sign by hand.
-  COMPANY_SIGNATORY_NAME: '',
-  COMPANY_SIGNATORY_TITLE: 'Authorised Signatory',
+  // The Disclosing Party, exactly as printed on the NDA.
+  COMPANY_LEGAL_NAME: 'TagneticAI LLP',
+  COMPANY_ADDRESS: 'F/NO-1 A MAINAK APT, F/N-1A, GROUND FLOOR C/F-10/1, JYANGRA GHOSPARA, KOL-59 NORTH 24 PARGANAS 700059',
 
-  // Legal terms used in the template (NdaTemplate.html).
-  JURISDICTION_CITY: 'Kolkata',
-  CONFIDENTIALITY_YEARS: 3,
+  // Optional: Drive file ID of a PNG of the company stamp and authorised signature (transparent
+  // background). When set, every NDA comes out already signed by the company, as the Canva NDAs are.
+  // Note that anyone with the portal link can then produce a company-signed NDA for any name.
+  // Leave blank to sign the company's part by hand when the employee's signed copy comes back.
+  COMPANY_SIGNATURE_FILE_ID: '',
 
   // Reference numbers look like TAI-NDA-261024-7K3QX.
   REF_PREFIX: 'TAI-NDA',

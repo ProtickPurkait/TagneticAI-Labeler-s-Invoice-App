@@ -73,8 +73,9 @@ page is served.
 
 | File | What it is |
 |---|---|
-| `apps-script/Config.gs` | **Edit this.** Company details, signatory, jurisdiction, MLID format, HR email, Aadhaar masking. |
-| `apps-script/NdaTemplate.html` | **The NDA wording.** Edit the text freely and keep the placeholder tags. |
+| `apps-script/Config.gs` | **Edit this.** Company name and address, optional pre-applied stamp/signature, MLID format, HR email, Aadhaar masking. |
+| `apps-script/NdaTemplate.html` | **The NDA.** Your Canva NDA's wording and layout, with the employee's details filled in. Edit the text freely and keep the placeholder tags. |
+| `apps-script/Assets.gs` | The T<GNETIC logo badge and watermark from the Canva NDA, embedded as image data. |
 | `apps-script/Code.gs` | Server: `doGet`, `generateNda`, `uploadSignedNda`, `setup`, `previewNda`. |
 | `apps-script/Validation.gs` | Field rules shared by the page and the server. |
 | `apps-script/Index.html` | The employee-facing page (Bootstrap 5, same look as the invoice app). |
@@ -95,9 +96,10 @@ is best: the files stay in company Drive, and it can send 1,500 emails a day ins
 3. Back in **Editor**, create these files and paste in the contents from `apps-script/`:
    - `appsscript.json`: replace its contents.
    - `Code.gs`: replace the default contents.
-   - **+ → Script**, name it `Config`, then **+ → Script**, name it `Validation`. The editor adds `.gs` itself.
+   - **+ → Script** three times, naming them `Config`, `Assets` and `Validation`. The editor adds `.gs` itself.
    - **+ → HTML**, name it `Index`, then **+ → HTML**, name it `NdaTemplate`. The editor adds `.html` itself.
-4. Edit `Config.gs`: signatory name and title, `MLID_PATTERN` (your real MLID format), and `HR_EMAIL`. Then save (Ctrl/Cmd + S).
+4. Edit `Config.gs`: `MLID_PATTERN` (your real MLID format), `HR_EMAIL`, and optionally
+   `COMPANY_SIGNATURE_FILE_ID` (see [Company signature](#company-signature)). Then save (Ctrl/Cmd + S).
 
 ### 2. Create the Drive folders and register
 1. In the function dropdown at the top, pick **`setup`** → **Run**.
@@ -109,6 +111,10 @@ is best: the files stay in company Drive, and it can send 1,500 emails a day ins
 ### 3. Check the document
 Pick **`previewNda`** → **Run**, then open the PDF link from the log. Adjust `NdaTemplate.html` or
 `Config.gs` and run it again until you're happy. Delete the preview PDFs afterwards.
+
+Google's HTML-to-PDF converter handles less styling than a web browser. The layout is built so that if
+it drops the decorative extras (the pink side bar and the faint logo watermark), the text, tables, logo
+badge and signature boxes still come out right.
 
 ### 4. Deploy the web app
 1. **Deploy → New deployment** → gear icon → **Web app**.
@@ -141,8 +147,21 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
 - **If an employee made a typo,** they correct the form and generate again. Each attempt gets its own
   reference number; the newest one is the one they upload against.
 - **Re-uploads,** for example a missed page, are kept alongside the earlier files.
-- **Countersigning:** print the uploaded copy, sign as the company, and file it. Or set
-  `COMPANY_SIGNATORY_NAME` so the name is printed, and sign the original by hand.
+- **Company signature:** see below.
+
+### Company signature
+
+Your Canva NDAs go out already stamped and signed by the Designated Partner. The portal can do the same:
+
+1. Make a PNG of the stamp and signature on a transparent background, e.g. export just those two
+   elements from Canva with *Transparent background* ticked.
+2. Upload it to the *TagneticAI NDAs* Drive folder. Open it, and copy the file ID from the link
+   (`https://drive.google.com/file/d/`**`THIS-PART`**`/view`).
+3. Paste the ID into `COMPANY_SIGNATURE_FILE_ID` in `Config.gs` and deploy a new version.
+
+The trade-off: anyone who has the portal link can then produce a company-signed NDA in any name.
+If you'd rather not, leave it blank. The *Disclosing Party* box stays empty, and you sign it by hand
+when the employee's signed copy comes in.
 
 ---
 
@@ -156,9 +175,14 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
   it holds PAN numbers, addresses and phone numbers.
 - **DPDP Act, 2023.** You are collecting personal data. Tell employees why, keep it only as long as you need
   it, and limit who can open the register.
-- **The NDA text is a starting template, not legal advice.** Have a lawyer review it before use, in
-  particular the ownership clause, the confidentiality period, and whether it should be executed on
-  e-stamp paper so it is admissible in evidence.
+- **The NDA wording is your existing Canva NDA, word for word.** Three things are new: a reference
+  number under the title, the employee's Aadhaar/PAN/mobile/MLID lines, and the date filled in
+  automatically. Canva's leftover template hint (*"Use this NDA to protect confidential information shared
+  during early-stage discussions..."*) has been dropped. Points worth raising with your lawyer:
+  - The clauses refer to "the Company" and "the Employee", but the parties are introduced only as
+    "Disclosing Party" and "Receiving Party". Adding *(the "Company")* and *(the "Employee")* after the
+    names would tie the terms together.
+  - Whether it should be executed on e-stamp paper so it is admissible in evidence.
 - **Who can use it:** anyone with the link can open the portal and generate an NDA, just like the
   invoice app. Uploading to an NDA requires both its reference number and the matching MLID.
 

@@ -1,150 +1,178 @@
 <!DOCTYPE html>
 <!--
-  The NDA document. Code.gs fills it in and converts it to PDF.
+  The NDA document, laid out like the company's Canva NDA. Code.gs fills it in and converts it to PDF.
   Edit the wording freely, but keep the placeholder tags (the ones that start with "<" + "?=");
   Apps Script fills them in and HTML-escapes their values.
-  This is a starting template, not legal advice: have it reviewed by your lawyer before use.
 -->
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    @page { size: A4; margin: 18mm 16mm; }
-    body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.45; color: #000; }
-    h1 { font-size: 15pt; text-align: center; margin: 0 0 4px; letter-spacing: 0.5px; }
-    .meta { text-align: center; font-size: 9.5pt; color: #444; margin-bottom: 16px; }
-    h2 { font-size: 11pt; margin: 14px 0 4px; }
-    p { margin: 0 0 6px; text-align: justify; }
-    .item { margin: 0 0 4px 22px; text-align: justify; }
-    table { border-collapse: collapse; width: 100%; }
-    .details td { border: 1px solid #555; padding: 4px 8px; font-size: 10.5pt; vertical-align: top; }
-    .details td.label { width: 28%; background: #f0f0f0; font-weight: bold; }
-    .signatures { margin-top: 26px; page-break-inside: avoid; }
-    .signatures td { width: 50%; vertical-align: top; padding: 0 12px 0 0; font-size: 10.5pt; }
-    .sign-line { border-bottom: 1px solid #000; height: 46px; margin-bottom: 4px; }
-    .note { margin-top: 22px; font-size: 9pt; color: #555; border-top: 1px solid #aaa; padding-top: 6px; }
+    @page { size: A4; margin: 16mm 18mm 16mm 9mm; }
+    body { margin: 0; font-family: 'Proxima Nova', 'Helvetica Neue', Arial, sans-serif; color: #222222; font-size: 10.5pt; line-height: 1.35; }
+    /* The pink bar down the left edge. */
+    .sheet { border-left: 10pt solid #ff7fc2; padding-left: 38pt; }
+    h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; color: #6a25d0; font-size: 40pt; line-height: 1.08; margin: 0 0 4pt; }
+    h1 img { height: 34pt; vertical-align: middle; }
+    .ref { font-size: 8pt; color: #8a8a8a; margin: 0 0 12pt; }
+    .lead { font-size: 11pt; margin: 0 0 14pt; }
+    .parties { width: 100%; border-collapse: collapse; background-image: url('<?= assets.watermark ?>'); background-repeat: no-repeat; background-position: center 40%; background-size: 100% auto; }
+    .parties td { width: 50%; vertical-align: top; padding: 0 14pt 0 0; }
+    .party-label { font-weight: bold; font-size: 9pt; margin: 0 0 9pt; }
+    .party-text { color: #692d99; font-size: 9pt; line-height: 1.45; margin: 0; }
+    .party-ids { color: #692d99; font-size: 9pt; line-height: 1.45; margin: 8pt 0 0; }
+    hr { border: 0; border-top: 1pt solid #042825; margin: 11pt 0 13pt; }
+    .clause { page-break-inside: avoid; }
+    h2 { font-size: 9pt; font-weight: bold; margin: 0 0 8pt; }
+    .clause p { color: #692d99; font-size: 9pt; line-height: 1.35; margin: 0 0 7pt; }
+    ul { margin: 0; padding-left: 22pt; }
+    li { font-size: 11pt; line-height: 1.3; margin: 0 0 2pt; }
+    .signatures { width: 100%; border-collapse: collapse; margin-top: 14pt; page-break-inside: avoid; }
+    .signatures td { width: 50%; vertical-align: top; text-align: center; padding: 0 10pt; }
+    .sign-rule { border-top: 1pt solid #042825; }
+    .sign-label { font-weight: bold; font-size: 9pt; margin: 9pt 0 0; }
+    .sign-space { height: 54pt; }
+    .sign-space img { max-height: 54pt; max-width: 100%; }
+    .sign-address { font-size: 11pt; line-height: 1.3; margin: 4pt 0 0; }
+    .end-rule { border-top: 2pt solid #042825; margin-top: 10pt; }
   </style>
 </head>
 <body>
+<div class="sheet">
 
-  <h1>NON-DISCLOSURE AND CONFIDENTIALITY AGREEMENT</h1>
-  <div class="meta">Ref: <?= ref ?> &nbsp;|&nbsp; Date: <?= dateText ?></div>
+  <h1>NON-DISCLOSURE<br>AGREEMENT <img src="<?= assets.logoBadge ?>" alt="TagneticAI"></h1>
+  <p class="ref">Ref: <?= ref ?></p>
 
-  <p>This Non-Disclosure and Confidentiality Agreement (the <b>"Agreement"</b>) is made on <b><?= dateText ?></b> at <?= city ?>
-  between:</p>
+  <p class="lead">This Non-Disclosure Agreement ("Agreement") is entered into as of <?= dateText ?>, by and between:</p>
 
-  <p><b><?= company.name ?></b>, having its place of business at <?= company.address ?> (the <b>"Company"</b>, which expression
-  includes its successors and assigns); and</p>
-
-  <p><b><?= employee.fullName ?></b>, whose details are set out below (the <b>"Employee"</b>).</p>
-
-  <table class="details">
-    <tr><td class="label">Full name</td><td><?= employee.fullName ?></td></tr>
-    <tr><td class="label">Residential address</td><td><?= employee.address ?></td></tr>
-    <tr><td class="label">Aadhaar number</td><td><?= aadhaarShown ?></td></tr>
-    <tr><td class="label">PAN</td><td><?= employee.pan ?></td></tr>
-    <tr><td class="label">Mobile number</td><td>+91 <?= employee.mobile ?></td></tr>
-    <tr><td class="label">MLID</td><td><?= employee.mlid ?></td></tr>
-  </table>
-
-  <h2>Background</h2>
-  <p>The Company provides artificial-intelligence data services, including data labelling, annotation, video review and
-  related work, for itself and for its clients. The Employee has been engaged by the Company and, in the course of that
-  engagement, will receive or have access to Confidential Information. The parties therefore agree as follows.</p>
-
-  <h2>1. Confidential Information</h2>
-  <p>"Confidential Information" means all non-public information, in any form, that the Employee receives or accesses in
-  connection with the engagement, including:</p>
-  <p class="item">(a) client data, datasets, images, videos, audio, text and documents provided for labelling, annotation or review;</p>
-  <p class="item">(b) labels, annotations, reviews, outputs and all other work product;</p>
-  <p class="item">(c) annotation guidelines and instructions, project names, the identity of clients, and the existence and nature of any project;</p>
-  <p class="item">(d) software, tools, platforms, models, prompts, source code, login credentials and access methods;</p>
-  <p class="item">(e) pricing, rates, payment terms, business plans, and information about other employees or contractors; and</p>
-  <p class="item">(f) any personal data relating to an identified or identifiable individual.</p>
-
-  <h2>2. Exclusions</h2>
-  <p>Clause 3 does not apply to information that the Employee can show (a) is or becomes public other than through a breach
-  of this Agreement, (b) was lawfully known to the Employee before the engagement without any duty of confidence, or
-  (c) is lawfully received from a third party who is free to disclose it. If the Employee is required by law or by a court or
-  government authority to disclose Confidential Information, the Employee shall, where lawful, promptly inform the Company
-  and disclose only the minimum required.</p>
-
-  <h2>3. Obligations of the Employee</h2>
-  <p>The Employee shall:</p>
-  <p class="item">(a) use Confidential Information only to perform the work assigned by the Company;</p>
-  <p class="item">(b) not disclose Confidential Information to anyone other than the Company's authorised personnel who need to know it;</p>
-  <p class="item">(c) not copy, download, screenshot, photograph, screen-record, print or otherwise reproduce Confidential Information
-  except as expressly required by the assigned work;</p>
-  <p class="item">(d) not upload, paste or submit Confidential Information to any third-party service, including public AI tools and
-  chatbots, translation services, file-sharing services or personal cloud storage, unless the Company has approved it in writing;</p>
-  <p class="item">(e) access the systems of the Company and its clients only with credentials issued to the Employee, keep those
-  credentials secret, and never share an account;</p>
-  <p class="item">(f) protect Confidential Information with at least reasonable care, including on any personal device used for work; and</p>
-  <p class="item">(g) inform the Company immediately on becoming aware of any actual or suspected unauthorised access, use or disclosure.</p>
-
-  <h2>4. Personal Data</h2>
-  <p>Datasets may contain personal data such as faces, voices, vehicle registration numbers or other identifiers. The
-  Employee shall process such data only as instructed by the Company, shall not attempt to identify, contact or profile any
-  individual, and shall comply with the Digital Personal Data Protection Act, 2023 and the Information Technology Act, 2000,
-  and the rules made under them, as applicable.</p>
-
-  <h2>5. Ownership</h2>
-  <p>All Confidential Information remains the property of the Company or its clients. All labels, annotations, reviews and
-  other work product created by the Employee in the course of the engagement belong exclusively to the Company (or to its
-  client, as the Company directs). Nothing in this Agreement grants the Employee any licence or right in them.</p>
-
-  <h2>6. Return and Deletion</h2>
-  <p>When a project ends, when the engagement ends for any reason, or whenever the Company asks, the Employee shall within
-  seven (7) days return or permanently delete all Confidential Information in the Employee's possession or control,
-  including copies on personal devices and accounts, and shall confirm this in writing if asked.</p>
-
-  <h2>7. Duration</h2>
-  <p>This Agreement takes effect on the date above. The Employee's obligations continue during the engagement and for
-  <?= years ?> years after it ends, except that obligations concerning personal data and trade secrets continue for as long
-  as that information remains personal data or a trade secret.</p>
-
-  <h2>8. Breach</h2>
-  <p>The Employee acknowledges that a breach of this Agreement may cause the Company and its clients irreparable harm. In
-  addition to any other remedy available under law, including damages and termination of the engagement, the Company may
-  seek an injunction to prevent or stop any breach.</p>
-
-  <h2>9. Accuracy of Details</h2>
-  <p>The Employee confirms that the personal details set out above were entered by the Employee and are true and correct,
-  and shall inform the Company promptly of any change.</p>
-
-  <h2>10. General</h2>
-  <p>This Agreement is governed by the laws of India, and the courts at <?= city ?> have exclusive jurisdiction over any
-  dispute arising from it. It is the entire agreement between the parties on confidentiality and may be changed only in
-  writing signed by both parties. If any provision is held unenforceable, the rest of the Agreement remains in force. A
-  delay in enforcing any right is not a waiver of it. This Agreement does not by itself create or change any term of the
-  Employee's engagement.</p>
-
-  <table class="signatures">
+  <table class="parties">
     <tr>
       <td>
-        <b>For <?= company.name ?></b>
-        <div class="sign-line"></div>
-        Signature<br>
-        Name: <?= company.signatoryName || '______________________' ?><br>
-        Designation: <?= company.signatoryTitle ?><br>
-        Date: ______________________
+        <p class="party-label">Disclosing Party: <?= company.legalName ?></p>
+        <p class="party-text"><?= company.address ?></p>
       </td>
       <td>
-        <b>Employee</b>
-        <div class="sign-line"></div>
-        Signature<br>
-        Name: <?= employee.fullName ?><br>
-        MLID: <?= employee.mlid ?><br>
-        Date: ______________________<br>
-        Place: ______________________
+        <p class="party-label">Receiving Party: <?= employee.fullName ?></p>
+        <p class="party-text"><?= employee.address ?></p>
+        <p class="party-ids">
+          Aadhaar No.: <?= aadhaarShown ?><br>
+          PAN: <?= employee.pan ?><br>
+          Mobile: +91 <?= employee.mobile ?><br>
+          MLID: <?= employee.mlid ?>
+        </p>
       </td>
     </tr>
   </table>
 
-  <div class="note">
-    Employee: sign above and initial the bottom of every page, then upload a scan or photo of all pages on the
-    <?= company.name ?> NDA portal using reference <b><?= ref ?></b>.
+  <hr>
+
+  <div class="clause">
+    <h2>1. Definition of Confidential Information</h2>
+    <p>For purposes of this Agreement, "Confidential Information" shall include all information or material that has or could
+    have commercial value or other utility in the business in which the Company is engaged. This includes, but is not limited
+    to: source code, AI models, algorithms, machine learning datasets, technical specifications, business plans, financial data,
+    client lists, marketing strategies, trade secrets, and any other proprietary information relating to the Company's current,
+    future, and proposed products or services.</p>
+    <ul>
+      <li>Operational Note: All data accessed through Company platforms and internal tools is proprietary and considered
+      Confidential Information by default.</li>
+    </ul>
   </div>
 
+  <hr>
+
+  <div class="clause">
+    <h2>2. Obligations of Receiving Party</h2>
+    <p>The Employee agrees to hold and maintain the Confidential Information in strictest confidence for the sole and exclusive
+    benefit of the Company.</p>
+    <ul>
+      <li>Access Control: The Employee shall carefully restrict access to Confidential Information to authorized personnel.</li>
+      <li>Usage Restrictions: The Employee shall not, without prior written approval of the Company, use for Employee's own
+      benefit, publish, copy, or otherwise disclose to others any Confidential Information.</li>
+      <li>Portfolio Exception: The Employee may reference their role and general duties (e.g., "Video Data Annotator") on
+      professional resumes or portfolios, provided no client identities or proprietary project details are revealed.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <div class="clause">
+    <h2>3. Exceptions to Confidential Information</h2>
+    <p>The obligations under this Agreement do not apply to information that:</p>
+    <ul>
+      <li>(a) is or becomes publicly known through no wrongful act of the Employee;</li>
+      <li>(b) is received from a third party without breach of any obligation of confidentiality;</li>
+      <li>(c) is required to be disclosed by law or court order, provided that the Employee gives the Company prompt written
+      notice.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <div class="clause">
+    <h2>4. Intellectual Property and General Skills</h2>
+    <p>The Employee acknowledges that all Confidential Information, including any modifications, enhancements, or derivatives
+    thereof created during the course of employment, remains the sole and exclusive property of the Company. Nothing in this
+    Agreement shall be construed as granting any rights to the Employee, by license or otherwise, to any Confidential
+    Information.</p>
+    <ul>
+      <li>Clarification of Skills: General skills, labeling techniques, and industry experience gained during the course of
+      employment remain with the Employee and are not considered Confidential Information.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <div class="clause">
+    <h2>5. Return of Materials and Digital Backups</h2>
+    <p>Upon the termination of employment or at the Company's request, the Employee shall immediately return all records,
+    notes, and other written, printed, or tangible materials in their possession pertaining to Confidential Information.</p>
+    <ul>
+      <li>Backup Exclusion: This clause shall not apply to Confidential Information residing on automatic, non-selective
+      electronic backup systems, provided such information is not actively accessed or used after termination.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <div class="clause">
+    <h2>6. Term and Termination</h2>
+    <p>The nondisclosure provisions regarding Trade Secrets shall survive the termination of the Employee's employment
+    indefinitely. For all other Confidential Information, the obligations shall remain in effect for a fixed term of three (3)
+    years following the termination of the Employee's employment.</p>
+  </div>
+
+  <hr>
+
+  <div class="clause">
+    <h2>7. Governing Law and Jurisdiction</h2>
+    <p>This Agreement shall be governed by and construed in accordance with the laws of India. Any disputes arising under or in
+    connection with this Agreement shall be subject to the exclusive jurisdiction of the courts in Kolkata, West Bengal.</p>
+  </div>
+
+  <table class="signatures">
+    <tr>
+      <td>
+        <div class="sign-rule"></div>
+        <p class="sign-label">Disclosing Party:</p>
+        <div class="sign-space"><? if (company.signatureImage) { ?><img src="<?= company.signatureImage ?>" alt=""><? } ?></div>
+        <div class="sign-rule"></div>
+        <p class="sign-label">Signature:</p>
+        <p class="sign-address"><?= company.address ?></p>
+      </td>
+      <td>
+        <div class="sign-rule"></div>
+        <p class="sign-label">Receiving Party:</p>
+        <div class="sign-space"></div>
+        <div class="sign-rule"></div>
+        <p class="sign-label">Signature:</p>
+        <p class="sign-address"><?= employee.address ?></p>
+      </td>
+    </tr>
+  </table>
+
+  <div class="end-rule"></div>
+
+</div>
 </body>
 </html>

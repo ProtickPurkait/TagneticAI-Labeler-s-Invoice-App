@@ -101,7 +101,7 @@
       <h5 class="mb-2 text-primary">2. Print &amp; Sign</h5>
       <ol class="mb-0">
         <li>Print all pages on A4 paper and read the agreement fully.</li>
-        <li>Sign in the <em>Employee</em> box at the end and write the date and place.</li>
+        <li>Sign above <em>Signature:</em> under <em>Receiving Party</em> on the last page.</li>
         <li>Initial the bottom of every page. Use blue or black ink.</li>
         <li>Scan every page, or photograph each page flat and in good light, then upload below.</li>
       </ol>
@@ -274,7 +274,7 @@
         if (!response.success) throw new Error(response.error);
         showAlert('uploadAlert', 'success',
           '✅ <strong>Thank you!</strong> We received ' + response.count + ' file(s) for NDA ' + escapeHtml(response.ref) +
-          '. HR will countersign and keep it on record.');
+          '. HR will keep it on record.');
         $('uploadForm').reset();
         $('fileList').innerHTML = '';
       } catch (err) {

@@ -95,7 +95,13 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   assert.ok(html.includes('XXXX XXXX ' + AADHAAR.slice(-4)));
   assert.ok(!html.includes(AADHAAR) && !html.includes(AADHAAR.slice(0, 4) + ' ' + AADHAAR.slice(4, 8)), 'full Aadhaar must not appear');
   assert.ok(html.includes(res.ref));
-  assert.match(html, /courts at Kolkata/);
+  assert.match(html, /Disclosing Party: TagneticAI LLP/);
+  assert.match(html, /Receiving Party: Rahul Kumar Das/);
+  assert.match(html, /MLID: ML-0042/);
+  assert.match(html, /entered into as of [A-Z][a-z]+ \d{1,2}(st|nd|rd|th), \d{4}, by and between/);
+  assert.match(html, /exclusive jurisdiction of the courts in Kolkata, West Bengal/);
+  assert.match(html, /src="data:image\/png;base64,/, 'logo is embedded, not linked');
+  assert.ok(!/<img[^>]*alt=""/.test(html), 'no company signature image unless configured');
 
   const row = rowFor(app, res.ref);
   assert.equal(row['MLID'], 'ML-0042');
@@ -205,6 +211,28 @@ test('HR is emailed about signed copies when HR_EMAIL is set', () => {
   assert.equal(app.mail[0].to, 'hr@tagneticai.com');
   assert.match(app.mail[0].subject, /Signed NDA received: Rahul Kumar Das/);
   assert.match(app.mail[0].body, /MLID ML-0042/);
+});
+
+test('the NDA date uses the "June 17th, 2026" style', () => {
+  const app = createApp();
+  const at = (day) => new Date(Date.UTC(2026, 5, day, 6, 30)); // 12:00 in Kolkata
+  const expected = {
+    1: 'June 1st, 2026', 2: 'June 2nd, 2026', 3: 'June 3rd, 2026', 4: 'June 4th, 2026',
+    11: 'June 11th, 2026', 12: 'June 12th, 2026', 13: 'June 13th, 2026', 17: 'June 17th, 2026',
+    21: 'June 21st, 2026', 22: 'June 22nd, 2026', 23: 'June 23rd, 2026', 30: 'June 30th, 2026',
+  };
+  Object.keys(expected).forEach((day) => assert.equal(app.context.longDate_(at(Number(day))), expected[day]));
+  // Uses India time: 20:00 UTC on June 16 is already June 17 in Kolkata.
+  assert.equal(app.context.longDate_(new Date(Date.UTC(2026, 5, 16, 20, 0))), 'June 17th, 2026');
+});
+
+test('a configured company stamp and signature is printed on every NDA', () => {
+  const app = readyApp();
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const id = app.addFile('stamp.png', png, 'image/png');
+  app.eval('CONFIG.COMPANY_SIGNATURE_FILE_ID = ' + JSON.stringify(id));
+  const html = pdfHtml(app.call('generateNda', employee()));
+  assert.ok(html.includes('<img src="data:image/png;base64,' + png.toString('base64') + '" alt="">'));
 });
 
 test('previewNda saves a sample PDF without touching the register', () => {

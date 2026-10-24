@@ -109,7 +109,7 @@ function generateNda(input) {
           'Your Non-Disclosure Agreement is attached. Reference number: ' + ref,
           '',
           '1. Print all pages and read the agreement fully.',
-          '2. Sign at the end and initial the bottom of every page, in blue or black ink.',
+          '2. Sign under "Receiving Party" on the last page and initial the bottom of every page, in blue or black ink.',
           '3. Scan or photograph every page clearly.',
           '4. Upload the signed pages on the NDA portal using your reference number and MLID.',
           '',
@@ -211,22 +211,34 @@ function uploadSignedNda(input) {
 function renderNdaPdf_(employee, aadhaarShown, ref, date) {
   const template = HtmlService.createTemplateFromFile('NdaTemplate');
   template.company = {
-    name: CONFIG.COMPANY_NAME,
+    legalName: CONFIG.COMPANY_LEGAL_NAME,
     address: CONFIG.COMPANY_ADDRESS,
-    phone: CONFIG.COMPANY_PHONE,
-    signatoryName: CONFIG.COMPANY_SIGNATORY_NAME,
-    signatoryTitle: CONFIG.COMPANY_SIGNATORY_TITLE,
+    signatureImage: companySignatureImage_(),
   };
   template.employee = employee;
   template.aadhaarShown = aadhaarShown;
   template.ref = ref;
-  template.dateText = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd MMMM yyyy');
-  template.city = CONFIG.JURISDICTION_CITY;
-  template.years = CONFIG.CONFIDENTIALITY_YEARS;
+  template.dateText = longDate_(date);
+  template.assets = ASSETS;
 
   const html = template.evaluate().getContent();
   const fileName = ref + ' - NDA - ' + employee.fullName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
   return Utilities.newBlob(html, MimeType.HTML, 'nda.html').getAs(MimeType.PDF).setName(fileName);
+}
+
+// The optional pre-applied company stamp and signature, as a data URI for the template.
+function companySignatureImage_() {
+  if (!CONFIG.COMPANY_SIGNATURE_FILE_ID) return '';
+  const blob = DriveApp.getFileById(CONFIG.COMPANY_SIGNATURE_FILE_ID).getBlob();
+  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+}
+
+// "June 17th, 2026", the date style used in the company's NDA.
+function longDate_(date) {
+  const tz = Session.getScriptTimeZone();
+  const day = Number(Utilities.formatDate(date, tz, 'd'));
+  const suffix = day % 100 >= 11 && day % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][day % 10] || 'th';
+  return Utilities.formatDate(date, tz, 'MMMM') + ' ' + day + suffix + ', ' + Utilities.formatDate(date, tz, 'yyyy');
 }
 
 function newRef_(date) {

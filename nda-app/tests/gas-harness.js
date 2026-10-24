@@ -8,7 +8,7 @@ const path = require('path');
 const vm = require('vm');
 
 const SRC = path.join(__dirname, '..', 'apps-script');
-const SCRIPT_FILES = ['Config.gs', 'Validation.gs', 'Code.gs'];
+const SCRIPT_FILES = ['Config.gs', 'Assets.gs', 'Validation.gs', 'Code.gs'];
 
 function escapeHtml(value) {
   return String(value)
@@ -84,6 +84,7 @@ function createApp() {
       getName() { return this.name; },
       getUrl() { return 'https://drive.google.com/file/d/' + this.id + '/view'; },
       isTrashed() { return this.trashed; },
+      getBlob() { return this.blob; },
       moveTo(folder) { this.parentId = folder.getId(); return this; },
     };
     files.set(file.id, file);
@@ -254,6 +255,12 @@ function createApp() {
     call(name, arg) {
       const result = context[name](arg === undefined ? undefined : JSON.parse(JSON.stringify(arg)));
       return result === undefined ? undefined : JSON.parse(JSON.stringify(result));
+    },
+    /** Puts a file in "Drive" (e.g. a signature image) and returns its ID. */
+    addFile(name, bytes, type) {
+      const file = makeFile(name, null);
+      file.blob = new Blob(Buffer.from(bytes), type, name);
+      return file.id;
     },
     sheetRows() {
       return spreadsheets.get(props.SHEET_ID).getSheets()[0].rows;
