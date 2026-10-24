@@ -103,7 +103,9 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   assert.match(html, /MLID: ML-0042/);
   assert.match(html, /entered into as of [A-Z][a-z]+ \d{1,2}(st|nd|rd|th), \d{4}, by and between/);
   assert.match(html, /exclusive jurisdiction of the courts in Kolkata, West Bengal/);
-  assert.match(html, /src="data:image\/png;base64,/, 'logo is embedded, not linked');
+  assert.match(html, /<img src="data:image\/png;base64,[A-Za-z0-9+/=]+" alt="TagneticAI">/, 'logo survives template escaping');
+  assert.match(html, /background-image: url\('data:image\/png;base64,[A-Za-z0-9+/=]+'\)/, 'watermark survives template escaping');
+  assert.ok(!html.includes('zSoyz'));
   assert.ok(!/<img[^>]*alt=""/.test(html), 'no company signature image unless configured');
 
   const row = rowFor(app, res.ref);
@@ -236,6 +238,23 @@ test('a configured company stamp and signature is printed on every NDA', () => {
   app.eval('CONFIG.COMPANY_SIGNATURE_FILE_ID = ' + JSON.stringify(id));
   const html = pdfHtml(app.call('generateNda', employee()));
   assert.ok(html.includes('<img src="data:image/png;base64,' + png.toString('base64') + '" alt="">'));
+});
+
+test('only real PNG/JPEG data is ever printed raw into an image tag', () => {
+  const app = readyApp();
+  assert.equal(app.context.imageDataUri_('data:image/png;base64,iVBORw0KGgo='), 'data:image/png;base64,iVBORw0KGgo=');
+  assert.equal(app.context.imageDataUri_('data:image/jpeg;base64,/9j/4AAQ'), 'data:image/jpeg;base64,/9j/4AAQ');
+  assert.equal(app.context.imageDataUri_('data:image/png;base64,AAAA" onerror="alert(1)'), '');
+  assert.equal(app.context.imageDataUri_('data:text/html;base64,PHNjcmlwdD4='), '');
+  assert.equal(app.context.imageDataUri_('javascript:alert(1)'), '');
+  assert.equal(app.context.imageDataUri_(''), '');
+
+  // A signature file that isn't an image is left out rather than inserted.
+  const id = app.addFile('notes.html', Buffer.from('<script>alert(1)</script>'), 'text/html');
+  app.eval('CONFIG.COMPANY_SIGNATURE_FILE_ID = ' + JSON.stringify(id));
+  const html = pdfHtml(app.call('generateNda', employee()));
+  assert.ok(!/<img[^>]*alt=""/.test(html));
+  assert.ok(!html.includes('<script>'));
 });
 
 test('an unreadable signature file still issues the NDA, unsigned, and logs why', () => {

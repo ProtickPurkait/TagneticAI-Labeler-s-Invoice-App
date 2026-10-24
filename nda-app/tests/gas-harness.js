@@ -16,6 +16,15 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Apps Script escapes <?= ?> output by context. Where the output starts a URL (an src/href
+// attribute or a CSS url()), the URL is also sanitized: anything but http(s), mailto or a relative
+// URL, including data: URIs, is replaced with "#zSoyz".
+function sanitizeUrl(value) {
+  const v = String(value);
+  return /^(?:(?:https?|mailto):|[^&:\/?#]*(?:[\/?#]|$))/i.test(v) ? escapeHtml(v) : '#zSoyz';
+}
+const URL_CONTEXT = /(?:\b(?:src|href)\s*=\s*["']?|url\(\s*["']?)$/i;
+
 // Compiles Apps Script template syntax: <? code ?>, <?= escaped ?>, <?!= raw ?>.
 function compileTemplate(source) {
   const re = /<\?(!=|=)?([\s\S]*?)\?>/g;
@@ -24,7 +33,7 @@ function compileTemplate(source) {
   let m;
   while ((m = re.exec(source))) {
     code += '__out += ' + JSON.stringify(source.slice(last, m.index)) + ';\n';
-    if (m[1] === '=') code += '__out += __esc(' + m[2] + ');\n';
+    if (m[1] === '=') code += '__out += ' + (URL_CONTEXT.test(source.slice(last, m.index)) ? '__escUrl' : '__esc') + '(' + m[2] + ');\n';
     else if (m[1] === '!=') code += '__out += String(' + m[2] + ');\n';
     else code += m[2] + '\n';
     last = re.lastIndex;
@@ -180,8 +189,8 @@ function createApp() {
         // Compiled inside the script's context so templates see its globals (CONFIG, buildValidators_, ...);
         // template variables are parameters, so they shadow globals as in Apps Script.
         const names = Object.keys(vars);
-        const render = vm.runInContext('(function (__esc' + names.map((n) => ', ' + n).join('') + ') {\n' + compileTemplate(source) + '\n})', context);
-        const content = render(escapeHtml, ...names.map((n) => vars[n]));
+        const render = vm.runInContext('(function (__esc, __escUrl' + names.map((n) => ', ' + n).join('') + ') {\n' + compileTemplate(source) + '\n})', context);
+        const content = render(escapeHtml, sanitizeUrl, ...names.map((n) => vars[n]));
         const output = {
           content,
           getContent() { return content; },

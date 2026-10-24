@@ -2,7 +2,8 @@
 <!--
   The NDA document, laid out like the company's Canva NDA. Code.gs fills it in and converts it to PDF.
   Edit the wording freely, but keep the placeholder tags (the ones that start with "<" + "?=");
-  Apps Script fills them in and HTML-escapes their values.
+  Apps Script fills them in and HTML-escapes their values. The three images use the raw tag
+  ("<" + "?!=") instead, because the escaping tag blanks out embedded images; Code.gs checks them first.
 -->
 <html>
 <head>
@@ -16,7 +17,7 @@
     h1 img { height: 34pt; vertical-align: middle; }
     .ref { font-size: 8pt; color: #8a8a8a; margin: 0 0 12pt; }
     .lead { font-size: 11pt; margin: 0 0 14pt; }
-    .parties { width: 100%; border-collapse: collapse; background-image: url('<?= assets.watermark ?>'); background-repeat: no-repeat; background-position: center 40%; background-size: 100% auto; }
+    .parties { width: 100%; border-collapse: collapse; background-image: url('<?!= assets.watermark ?>'); background-repeat: no-repeat; background-position: center 40%; background-size: 100% auto; }
     .parties td { width: 50%; vertical-align: top; padding: 0 14pt 0 0; }
     .party-label { font-weight: bold; font-size: 9pt; margin: 0 0 9pt; }
     .party-text { color: #692d99; font-size: 9pt; line-height: 1.45; margin: 0; }
@@ -40,7 +41,7 @@
 <body>
 <div class="sheet">
 
-  <h1>NON-DISCLOSURE<br>AGREEMENT <img src="<?= assets.logoBadge ?>" alt="TagneticAI"></h1>
+  <h1>NON-DISCLOSURE<br>AGREEMENT <img src="<?!= assets.logoBadge ?>" alt="TagneticAI"></h1>
   <p class="ref">Ref: <?= ref ?></p>
 
   <p class="lead">This Non-Disclosure Agreement ("Agreement") is entered into as of <?= dateText ?>, by and between:</p>
@@ -155,7 +156,7 @@
       <td>
         <div class="sign-rule"></div>
         <p class="sign-label">Disclosing Party:</p>
-        <div class="sign-space"><? if (company.signatureImage) { ?><img src="<?= company.signatureImage ?>" alt=""><? } ?></div>
+        <div class="sign-space"><? if (company.signatureImage) { ?><img src="<?!= company.signatureImage ?>" alt=""><? } ?></div>
         <div class="sign-rule"></div>
         <p class="sign-label">Signature:</p>
         <p class="sign-address"><?= company.address ?></p>

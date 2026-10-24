@@ -213,13 +213,13 @@ function renderNdaPdf_(employee, aadhaarShown, ref, date) {
   template.company = {
     legalName: CONFIG.COMPANY_LEGAL_NAME,
     address: CONFIG.COMPANY_ADDRESS,
-    signatureImage: companySignatureImage_(),
+    signatureImage: imageDataUri_(companySignatureImage_()),
   };
   template.employee = employee;
   template.aadhaarShown = aadhaarShown;
   template.ref = ref;
   template.dateText = longDate_(date);
-  template.assets = ASSETS;
+  template.assets = { logoBadge: imageDataUri_(ASSETS.logoBadge), watermark: imageDataUri_(ASSETS.watermark) };
 
   const html = template.evaluate().getContent();
   const fileName = ref + ' - NDA - ' + employee.fullName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
@@ -237,6 +237,12 @@ function companySignatureImage_() {
     console.error('Company signature file ' + CONFIG.COMPANY_SIGNATURE_FILE_ID + ' could not be read; NDA issued unsigned. ' + err);
     return '';
   }
+}
+
+// Templates insert images with the raw printing tag, because the escaping tag replaces data: URLs
+// with a dummy value. So only well-formed base64 PNG/JPEG data URIs are let through.
+function imageDataUri_(value) {
+  return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]+={0,2}$/.test(value || '') ? value : '';
 }
 
 // "June 17th, 2026", the date style used in the company's NDA.
