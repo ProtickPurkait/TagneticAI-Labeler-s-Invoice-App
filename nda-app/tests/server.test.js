@@ -21,6 +21,8 @@ function employee(overrides) {
 
 function readyApp() {
   const app = createApp();
+  // Start without the company's real signature file (it lives in Drive); tests opt in.
+  app.eval("CONFIG.COMPANY_SIGNATURE_FILE_ID = ''");
   app.call('setup');
   return app;
 }
@@ -234,6 +236,15 @@ test('a configured company stamp and signature is printed on every NDA', () => {
   app.eval('CONFIG.COMPANY_SIGNATURE_FILE_ID = ' + JSON.stringify(id));
   const html = pdfHtml(app.call('generateNda', employee()));
   assert.ok(html.includes('<img src="data:image/png;base64,' + png.toString('base64') + '" alt="">'));
+});
+
+test('an unreadable signature file still issues the NDA, unsigned, and logs why', () => {
+  const app = readyApp();
+  app.eval("CONFIG.COMPANY_SIGNATURE_FILE_ID = 'deleted-file-id'");
+  const res = app.call('generateNda', employee());
+  assert.equal(res.success, true);
+  assert.ok(!/<img[^>]*alt=""/.test(pdfHtml(res)));
+  assert.ok(app.logs.some((line) => line.startsWith('ERROR') && line.includes('deleted-file-id')));
 });
 
 test('previewNda saves a sample PDF without touching the register', () => {

@@ -227,10 +227,16 @@ function renderNdaPdf_(employee, aadhaarShown, ref, date) {
 }
 
 // The optional pre-applied company stamp and signature, as a data URI for the template.
+// If the file can't be read, the NDA is still issued, unsigned, so new joiners aren't blocked.
 function companySignatureImage_() {
   if (!CONFIG.COMPANY_SIGNATURE_FILE_ID) return '';
-  const blob = DriveApp.getFileById(CONFIG.COMPANY_SIGNATURE_FILE_ID).getBlob();
-  return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  try {
+    const blob = DriveApp.getFileById(CONFIG.COMPANY_SIGNATURE_FILE_ID).getBlob();
+    return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch (err) {
+    console.error('Company signature file ' + CONFIG.COMPANY_SIGNATURE_FILE_ID + ' could not be read; NDA issued unsigned. ' + err);
+    return '';
+  }
 }
 
 // "June 17th, 2026", the date style used in the company's NDA.

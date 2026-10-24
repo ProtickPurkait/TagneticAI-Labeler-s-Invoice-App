@@ -14,7 +14,9 @@ const CONFIG = {
   // background). When set, every NDA comes out already signed by the company, as the Canva NDAs are.
   // Note that anyone with the portal link can then produce a company-signed NDA for any name.
   // Leave blank to sign the company's part by hand when the employee's signed copy comes back.
-  COMPANY_SIGNATURE_FILE_ID: '',
+  // Currently: "Company signature (NDA portal).png" in the TagneticAI NDAs folder. Keep that file
+  // private; this ID gives no access on its own.
+  COMPANY_SIGNATURE_FILE_ID: '1SQdeGrASfD0K7bU_rm9gfg1HYE29n01h',
 
   // Reference numbers look like TAI-NDA-261024-7K3QX.
   REF_PREFIX: 'TAI-NDA',
