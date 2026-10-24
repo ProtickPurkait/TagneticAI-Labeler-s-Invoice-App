@@ -1,0 +1,217 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { createApp, withCheckDigit } = require('./gas-harness');
+
+const AADHAAR = withCheckDigit('23456789012');
+
+function employee(overrides) {
+  return Object.assign({
+    fullName: 'Rahul Kumar Das',
+    address: '12 Lake Road, Salt Lake, Kolkata 700091',
+    aadhaar: AADHAAR.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3'),
+    pan: 'abcpe1234f',
+    mobile: '+91 98765 43210',
+    mlid: 'ML-0042',
+    email: '',
+    confirmed: true,
+  }, overrides);
+}
+
+function readyApp() {
+  const app = createApp();
+  app.call('setup');
+  return app;
+}
+
+function pdfHtml(response) {
+  const text = Buffer.from(response.pdfBase64, 'base64').toString('utf8');
+  assert.ok(text.startsWith('%PDF'), 'response should carry a PDF');
+  return text;
+}
+
+function rowFor(app, ref) {
+  const header = app.sheetRows()[0];
+  const row = app.sheetRows().find((r) => r[header.indexOf('NDA Ref')] === ref);
+  return row && Object.fromEntries(header.map((name, i) => [name, row[i]]));
+}
+
+function fileArg(bytes, mimeType, name) {
+  return { name: name || 'page.pdf', mimeType, base64: Buffer.from(bytes).toString('base64') };
+}
+const PDF_BYTES = Buffer.from('%PDF-1.7\nsigned scan');
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+
+test('doGet serves the portal and allows framing by the Netlify page', () => {
+  const app = createApp();
+  const page = app.context.doGet();
+  assert.equal(page.xFrameOptionsMode, 'ALLOWALL');
+  assert.equal(page.title, 'TagneticAI NDA Portal');
+  assert.match(page.getContent(), /Employee Non-Disclosure Agreement Portal/);
+  assert.match(page.getContent(), /Only the last 4 digits are printed and stored/);
+});
+
+test('setup creates folders and the register once, and is safe to re-run', () => {
+  const app = readyApp();
+  const first = Object.assign({}, app.props);
+  assert.deepEqual(Object.keys(first).sort(), ['GENERATED_FOLDER_ID', 'ROOT_FOLDER_ID', 'SHEET_ID', 'SIGNED_FOLDER_ID']);
+  assert.equal(app.sheetRows()[0][1], 'NDA Ref');
+  app.call('setup');
+  assert.deepEqual(app.props, first);
+});
+
+test('server functions explain when setup() has not been run', () => {
+  const app = createApp();
+  assert.throws(() => app.call('generateNda', employee()), /run setup\(\) once/);
+});
+
+test('generateNda rejects bad details field by field, and an unticked confirmation', () => {
+  const app = readyApp();
+  const bad = app.call('generateNda', employee({ aadhaar: '2345 6789 0123', pan: 'ABCCE1234F' }));
+  assert.equal(bad.success, false);
+  assert.deepEqual(Object.keys(bad.errors).sort(), ['aadhaar', 'pan']);
+
+  const unconfirmed = app.call('generateNda', employee({ confirmed: false }));
+  assert.equal(unconfirmed.success, false);
+  assert.match(unconfirmed.error, /confirm/);
+  assert.equal(app.sheetRows().length, 1, 'nothing is logged for rejected requests');
+});
+
+test('generateNda builds the PDF, files it, and logs a register row', () => {
+  const app = readyApp();
+  const res = app.call('generateNda', employee());
+
+  assert.equal(res.success, true);
+  assert.match(res.ref, /^TAI-NDA-\d{6}-[2-9A-HJ-NP-Z]{5}$/);
+  assert.equal(res.mlid, 'ML-0042');
+  assert.equal(res.fileName, res.ref + ' - NDA - Rahul Kumar Das.pdf');
+  assert.equal(res.emailed, false);
+
+  const html = pdfHtml(res);
+  assert.match(html, /Rahul Kumar Das/);
+  assert.match(html, /ABCPE1234F/);
+  assert.match(html, /\+91 9876543210/);
+  assert.ok(html.includes('XXXX XXXX ' + AADHAAR.slice(-4)));
+  assert.ok(!html.includes(AADHAAR) && !html.includes(AADHAAR.slice(0, 4) + ' ' + AADHAAR.slice(4, 8)), 'full Aadhaar must not appear');
+  assert.ok(html.includes(res.ref));
+  assert.match(html, /courts at Kolkata/);
+
+  const row = rowFor(app, res.ref);
+  assert.equal(row['MLID'], 'ML-0042');
+  assert.equal(row['Mobile'], '9876543210');
+  assert.equal(row['PAN'], 'ABCPE1234F');
+  assert.equal(row['Aadhaar'], 'XXXX XXXX ' + AADHAAR.slice(-4));
+  assert.equal(row['Status'], 'Awaiting signed copy');
+  assert.match(row['NDA PDF'], /^https:\/\/drive\.google\.com\/file\/d\//);
+
+  const generated = app.filesIn('GENERATED_FOLDER_ID');
+  assert.equal(generated.length, 1);
+  assert.equal(generated[0].name, res.fileName);
+});
+
+test('MASK_AADHAAR = false prints and stores the full number', () => {
+  const app = readyApp();
+  app.eval('CONFIG.MASK_AADHAAR = false');
+  const res = app.call('generateNda', employee());
+  const formatted = AADHAAR.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3');
+  assert.ok(pdfHtml(res).includes(formatted));
+  assert.equal(rowFor(app, res.ref)['Aadhaar'], formatted);
+});
+
+test('user text is HTML-escaped in the NDA and cannot become a sheet formula', () => {
+  const app = readyApp();
+  const res = app.call('generateNda', employee({ address: '=HYPERLINK("http://x") <b>12</b> Road, Kolkata 700091' }));
+  const html = pdfHtml(res);
+  assert.ok(html.includes('&lt;b&gt;12&lt;/b&gt;'));
+  assert.ok(!html.includes('<b>12</b>'));
+
+  const header = app.sheetRows()[0];
+  const raw = app.sheetRows()[1][header.indexOf('Address')];
+  assert.ok(raw.startsWith("'="), 'formula-looking text is stored with a leading apostrophe');
+});
+
+test('an email copy is sent with the PDF attached when an email is given', () => {
+  const app = readyApp();
+  const res = app.call('generateNda', employee({ email: 'Rahul@Example.com' }));
+  assert.equal(res.emailed, true);
+  assert.equal(app.mail.length, 1);
+  assert.equal(app.mail[0].to, 'rahul@example.com');
+  assert.ok(app.mail[0].subject.includes(res.ref));
+  assert.equal(app.mail[0].attachments[0].getName(), res.fileName);
+});
+
+test('uploadSignedNda checks the reference number and MLID pair', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  const files = [fileArg(PDF_BYTES, 'application/pdf')];
+
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-9999', files }).error, /No NDA matches/);
+  assert.match(app.call('uploadSignedNda', { ref: 'TAI-NDA-000000-AAAAA', mlid: 'ML-0042', files }).error, /No NDA matches/);
+  assert.match(app.call('uploadSignedNda', { ref: '', mlid: 'ML-0042', files }).error, /reference number/);
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [] }).error, /Attach/);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
+});
+
+test('uploadSignedNda rejects files that are not really PDF/JPG/PNG, and oversize batches', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  const fake = fileArg(Buffer.from('MZ\x90\x00 not a pdf'), 'application/pdf', 'virus.pdf');
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fake] }).error, /"virus.pdf" is not a PDF/);
+  const gif = fileArg(Buffer.from('GIF89a'), 'image/gif', 'x.gif');
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [gif] }).error, /not a PDF, JPG or PNG/);
+
+  const seven = Array.from({ length: 7 }, () => fileArg(PDF_BYTES, 'application/pdf'));
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: seven }).error, /at most 6 files/);
+
+  app.eval('CONFIG.MAX_UPLOAD_MB = 0.00001');
+  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] }).error, /larger than/);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
+});
+
+test('uploadSignedNda stores the pages, updates the register, and keeps re-uploads', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+
+  const first = app.call('uploadSignedNda', {
+    ref: ref.toLowerCase(), // typed in lower case
+    mlid: 'ml-0042',
+    files: [fileArg(JPEG_BYTES, 'image/jpeg', 'p1.jpg'), fileArg(JPEG_BYTES, 'image/jpeg', 'p2.jpg')],
+  });
+  assert.deepEqual(first, { success: true, ref, count: 2 });
+
+  let row = rowFor(app, ref);
+  assert.equal(row['Status'], 'Signed copy received');
+  assert.equal(row['Signed Copy'].split('\n').length, 2);
+  assert.match(row['Signed At'], /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+
+  const signed = app.filesIn('SIGNED_FOLDER_ID');
+  assert.equal(signed.length, 2);
+  signed.forEach((f) => assert.match(f.name, new RegExp('^' + ref + '_signed_\\d{8}-\\d{6}_[12]\\.jpg$')));
+
+  app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] });
+  row = rowFor(app, ref);
+  assert.equal(row['Signed Copy'].split('\n').length, 3);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 3);
+  assert.equal(app.mail.length, 0, 'no HR email unless HR_EMAIL is set');
+});
+
+test('HR is emailed about signed copies when HR_EMAIL is set', () => {
+  const app = readyApp();
+  app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'");
+  const { ref } = app.call('generateNda', employee());
+  app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] });
+  assert.equal(app.mail.length, 1);
+  assert.equal(app.mail[0].to, 'hr@tagneticai.com');
+  assert.match(app.mail[0].subject, /Signed NDA received: Rahul Kumar Das/);
+  assert.match(app.mail[0].body, /MLID ML-0042/);
+});
+
+test('previewNda saves a sample PDF without touching the register', () => {
+  const app = readyApp();
+  app.call('previewNda');
+  const generated = app.filesIn('GENERATED_FOLDER_ID');
+  assert.equal(generated.length, 1);
+  assert.match(generated[0].name, /^PREVIEW - TAI-NDA-PREVIEW - NDA - Sample Employee\.pdf$/);
+  assert.equal(app.sheetRows().length, 1);
+});
