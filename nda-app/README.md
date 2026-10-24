@@ -50,7 +50,7 @@ Employee                         Apps Script (runs as you)                Your G
 2. Downloads PDF (+ optional email copy)
    Prints, signs, initials every page
 3. Uploads scan/photos   ──►  uploadSignedNda()                    ──►  Signed NDAs/ + register row → "Signed copy received"
-   with reference no. + MLID     • ref + MLID must match a register row   (optional email to HR)
+   with reference no. + mobile   • ref + mobile must match a register row (optional email to HR)
 ```
 
 ### What is checked
@@ -62,7 +62,6 @@ Employee                         Apps Script (runs as you)                Your G
 | Aadhaar | 12 digits, cannot start with 0 or 1, and must pass the **Verhoeff checksum** that UIDAI uses, so almost every single-digit typo or swapped pair is caught. |
 | PAN | `AAAAA9999A` format, upper-cased, 4th letter must be `P` (individual). |
 | Mobile | 10 digits starting 6–9. `+91`, `91`, `0`, spaces and dashes are stripped. |
-| MLID | Matches `CONFIG.MLID_PATTERN`. Set this to your real format. |
 | Email | Optional. If given, the NDA is emailed to the employee as well. |
 
 The same rules run in the browser, for instant feedback, and on the server, so they can't be bypassed.
@@ -73,7 +72,7 @@ page is served.
 
 | File | What it is |
 |---|---|
-| `apps-script/Config.gs` | **Edit this.** Company name and address, optional pre-applied stamp/signature, MLID format, HR email, Aadhaar masking. |
+| `apps-script/Config.gs` | **Edit this.** Company name and address, optional pre-applied stamp/signature, HR email, Aadhaar masking. |
 | `apps-script/NdaTemplate.html` | **The NDA.** Your Canva NDA's wording and layout, with the employee's details filled in. Edit the text freely and keep the placeholder tags. |
 | `apps-script/Assets.gs` | The T<GNETIC logo badge and watermark from the Canva NDA, embedded as image data. |
 | `apps-script/Code.gs` | Server: `doGet`, `generateNda`, `uploadSignedNda`, `setup`, `previewNda`. |
@@ -98,8 +97,7 @@ is best: the files stay in company Drive, and it can send 1,500 emails a day ins
    - `Code.gs`: replace the default contents.
    - **+ → Script** three times, naming them `Config`, `Assets` and `Validation`. The editor adds `.gs` itself.
    - **+ → HTML**, name it `Index`, then **+ → HTML**, name it `NdaTemplate`. The editor adds `.html` itself.
-4. Edit `Config.gs`: `MLID_PATTERN` (your real MLID format), `HR_EMAIL`, and optionally
-   `COMPANY_SIGNATURE_FILE_ID` (see [Company signature](#company-signature)). Then save (Ctrl/Cmd + S).
+4. Edit `Config.gs`: `HR_EMAIL`, and optionally `COMPANY_SIGNATURE_FILE_ID` (see [Company signature](#company-signature)). Then save (Ctrl/Cmd + S).
 
 ### 2. Create the Drive folders and register
 1. In the function dropdown at the top, pick **`setup`** → **Run**.
@@ -142,8 +140,9 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
 
 ## For HR
 
-- **Register columns:** Generated At, NDA Ref, MLID, Full Name, Mobile, Email, Address, PAN, Aadhaar,
+- **Register columns:** Generated At, NDA Ref, Full Name, Mobile, Email, Address, PAN, Aadhaar,
   NDA PDF, Status, Signed Copy, Signed At. Filter *Status = Awaiting signed copy* to chase people up.
+  Columns are found by their heading, so you can reorder them or add your own; just keep those headings.
 - **If an employee made a typo,** they correct the form and generate again. Each attempt gets its own
   reference number; the newest one is the one they upload against.
 - **Re-uploads,** for example a missed page, are kept alongside the earlier files.
@@ -181,7 +180,7 @@ when the employee's signed copy comes in.
 - **DPDP Act, 2023.** You are collecting personal data. Tell employees why, keep it only as long as you need
   it, and limit who can open the register.
 - **The NDA wording is your existing Canva NDA, word for word.** Three things are new: a reference
-  number under the title, the employee's Aadhaar/PAN/mobile/MLID lines, and the date filled in
+  number under the title, the employee's Aadhaar/PAN/mobile lines, and the date filled in
   automatically. Canva's leftover template hint (*"Use this NDA to protect confidential information shared
   during early-stage discussions..."*) has been dropped. Points worth raising with your lawyer:
   - The clauses refer to "the Company" and "the Employee", but the parties are introduced only as
@@ -189,7 +188,7 @@ when the employee's signed copy comes in.
     names would tie the terms together.
   - Whether it should be executed on e-stamp paper so it is admissible in evidence.
 - **Who can use it:** anyone with the link can open the portal and generate an NDA, just like the
-  invoice app. Uploading to an NDA requires both its reference number and the matching MLID.
+  invoice app. Uploading to an NDA requires both its reference number and the mobile number given for it.
 
 ---
 

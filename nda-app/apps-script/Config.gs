@@ -26,11 +26,6 @@ const CONFIG = {
   // false -> the full 12-digit number is printed and stored.
   MASK_AADHAAR: true,
 
-  // MLID format check (regular expression). Tighten this once you know your exact format,
-  // e.g. '^ML[0-9]{5}$' for IDs like ML00042.
-  MLID_PATTERN: '^[A-Za-z0-9][A-Za-z0-9/_-]{1,29}$',
-  MLID_HINT: 'Your MLID as given by HR (letters, numbers, - _ /).',
-
   // Optional: who gets an email when a signed copy is uploaded. Blank = no email.
   HR_EMAIL: '',
 

@@ -74,18 +74,6 @@ test('Address: needs a 6-digit PIN code', () => {
   assert.match(V.rules.address('Kolkata').error, /15–300/);
 });
 
-test('MLID follows CONFIG.MLID_PATTERN', () => {
-  assert.deepEqual(plain(V.rules.mlid(' ML-0042 ')), { value: 'ML-0042' });
-  assert.match(V.rules.mlid('x').error, /MLID/);
-  assert.match(V.rules.mlid('ML 0042').error, /MLID/);
-
-  const strict = createApp();
-  strict.eval("CONFIG.MLID_PATTERN = '^ML[0-9]{5}$'");
-  const S = strict.eval('validators_()');
-  assert.deepEqual(plain(S.rules.mlid('ML00042')), { value: 'ML00042' });
-  assert.ok(S.rules.mlid('ML-0042').error);
-});
-
 test('Email is optional but must be valid when given', () => {
   assert.deepEqual(plain(V.rules.email('')), { value: '' });
   assert.deepEqual(plain(V.rules.email(' Rahul@Example.COM ')), { value: 'rahul@example.com' });
@@ -95,7 +83,7 @@ test('Email is optional but must be valid when given', () => {
 test('validateEmployee reports every bad field at once', () => {
   const result = V.validateEmployee({ fullName: 'Rahul Kumar', aadhaar: '123', pan: 'x' });
   assert.equal(result.ok, false);
-  assert.deepEqual(Object.keys(result.errors).sort(), ['aadhaar', 'address', 'mlid', 'mobile', 'pan']);
+  assert.deepEqual(Object.keys(result.errors).sort(), ['aadhaar', 'address', 'mobile', 'pan']);
   assert.equal(V.validateEmployee(null).ok, false);
 });
 
@@ -106,6 +94,7 @@ test('the validator source inlined into the page behaves the same', () => {
   // eslint-disable-next-line no-new-func
   const inlined = new Function('return ' + match[1])();
   assert.deepEqual(plain(inlined.rules.aadhaar(VALID_AADHAAR)), { value: VALID_AADHAAR });
-  assert.ok(inlined.rules.mlid('x').error);
+  assert.ok(inlined.rules.mobile('12345').error);
+  assert.equal(inlined.rules.mlid, undefined);
   assert.deepEqual(plain(inlined.rules.pan('abcpe1234f')), { value: 'ABCPE1234F' });
 });

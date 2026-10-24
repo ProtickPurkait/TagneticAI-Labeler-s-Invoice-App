@@ -109,6 +109,7 @@ function createApp() {
       setFrozenRows(n) { this.frozen = n; },
       getParent() { return spreadsheet; },
       getLastRow() { return rows.length; },
+      getLastColumn() { return rows.reduce((n, r) => Math.max(n, r ? r.length : 0), 0); },
       getRange(row, col, numRows = 1, numCols = 1) {
         const range = {
           getRow() { return row; },

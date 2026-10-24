@@ -33,14 +33,9 @@
       <p class="text-muted small">These are printed on your NDA exactly as you type them. Use the spelling on your PAN card.</p>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-6">
+        <div class="col-12">
           <label class="form-label" for="fullName">Full Name</label>
           <input type="text" class="form-control" id="fullName" name="fullName" autocomplete="name" placeholder="As on your PAN card">
-          <div class="invalid-feedback"></div>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="mlid">MLID</label>
-          <input type="text" class="form-control" id="mlid" name="mlid" autocomplete="off" placeholder="Your MLID from HR">
           <div class="invalid-feedback"></div>
         </div>
         <div class="col-12">
@@ -94,7 +89,7 @@
       <div class="alert alert-success mb-3">
         <div class="mb-1">🎉 <strong>Your NDA is ready.</strong> Your reference number is:</div>
         <div class="ref-box fw-bold" id="resultRef"></div>
-        <div class="small mt-1">Note it down. You need it, with your MLID, to upload the signed copy.</div>
+        <div class="small mt-1">Note it down. You need it, with your mobile number, to upload the signed copy.</div>
         <div class="small mt-1 d-none" id="resultEmailed">✉️ A copy has also been emailed to you.</div>
       </div>
       <a id="downloadLink" class="btn btn-success w-100 py-3 fs-5 mb-3" href="#">⬇️ Download NDA (PDF)</a>
@@ -114,7 +109,7 @@
     <!-- Step 3: signed copy upload -->
     <form id="uploadForm" novalidate>
       <h5 class="mb-3 text-primary">3. Upload Your Signed NDA</h5>
-      <p class="text-muted small">Already signed? Enter the reference number printed at the top of your NDA, your MLID, and the scanned pages.</p>
+      <p class="text-muted small">Already signed? Enter the reference number printed at the top of your NDA, the mobile number you gave for it, and the scanned pages.</p>
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label" for="uploadRef">NDA Reference Number</label>
@@ -122,9 +117,12 @@
           <div class="invalid-feedback">Enter the reference number from your NDA.</div>
         </div>
         <div class="col-md-6">
-          <label class="form-label" for="uploadMlid">MLID</label>
-          <input type="text" class="form-control" id="uploadMlid" autocomplete="off">
-          <div class="invalid-feedback">Enter your MLID.</div>
+          <label class="form-label" for="uploadMobile">Mobile Number</label>
+          <div class="input-group has-validation">
+            <span class="input-group-text">+91</span>
+            <input type="tel" class="form-control" id="uploadMobile" inputmode="tel" maxlength="17" autocomplete="tel-national" placeholder="As given for your NDA">
+            <div class="invalid-feedback">Enter the mobile number you gave for your NDA.</div>
+          </div>
         </div>
         <div class="col-12">
           <label class="form-label" for="uploadFiles">Signed pages (PDF, JPG or PNG)</label>
@@ -142,9 +140,9 @@
 
   <script>
     // Same rules as the server (Validation.gs), inlined when this page is served.
-    const Validators = (<?!= buildValidators_.toString() ?>)(<?!= jsonForScript_(validatorOptions_()) ?>);
+    const Validators = (<?!= buildValidators_.toString() ?>)();
     const LIMITS = <?!= jsonForScript_({ maxFiles: CONFIG.MAX_UPLOAD_FILES, maxMb: CONFIG.MAX_UPLOAD_MB }) ?>;
-    const FIELDS = ['fullName', 'mlid', 'address', 'aadhaar', 'pan', 'mobile', 'email'];
+    const FIELDS = ['fullName', 'address', 'aadhaar', 'pan', 'mobile', 'email'];
     const UPLOAD_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
     const $ = id => document.getElementById(id);
@@ -225,7 +223,7 @@
       $('resultPanel').classList.remove('d-none');
 
       $('uploadRef').value = response.ref;
-      $('uploadMlid').value = response.mlid;
+      $('uploadMobile').value = response.mobile;
       $('resultPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -240,7 +238,7 @@
         $('fileList').appendChild(li);
       });
     });
-    ['uploadRef', 'uploadMlid'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('is-invalid')));
+    ['uploadRef', 'uploadMobile'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('is-invalid')));
     $('uploadForm').addEventListener('submit', upload);
 
     async function upload(e) {
@@ -248,16 +246,16 @@
       hide('uploadAlert');
 
       const ref = $('uploadRef').value.trim().toUpperCase();
-      const mlid = $('uploadMlid').value.trim();
+      const mobile = $('uploadMobile').value.trim();
       const files = Array.from($('uploadFiles').files);
       $('uploadRef').classList.toggle('is-invalid', !ref);
-      $('uploadMlid').classList.toggle('is-invalid', !mlid);
+      $('uploadMobile').classList.toggle('is-invalid', !mobile);
       let fileError = '';
       if (!files.length) fileError = 'Attach the signed pages.';
       else if (files.length > LIMITS.maxFiles) fileError = 'Attach at most ' + LIMITS.maxFiles + ' files. Combine pages into one PDF if you have more.';
       $('uploadFilesError').textContent = fileError;
       $('uploadFiles').classList.toggle('is-invalid', !!fileError);
-      if (!ref || !mlid || fileError) return;
+      if (!ref || !mobile || fileError) return;
 
       setBusy('btnUpload', true, 'Uploading…');
       try {
@@ -269,7 +267,7 @@
         }
         const response = await callServer('uploadSignedNda', {
           ref: ref,
-          mlid: mlid,
+          mobile: mobile,
           files: prepared.map(f => ({ name: f.name, mimeType: f.mimeType, base64: f.base64 })),
         });
         if (!response.success) throw new Error(response.error);

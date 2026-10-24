@@ -12,7 +12,7 @@
  */
 
 const REGISTER_COLUMNS = [
-  'Generated At', 'NDA Ref', 'MLID', 'Full Name', 'Mobile', 'Email', 'Address', 'PAN', 'Aadhaar',
+  'Generated At', 'NDA Ref', 'Full Name', 'Mobile', 'Email', 'Address', 'PAN', 'Aadhaar',
   'NDA PDF', 'Status', 'Signed Copy', 'Signed At',
 ];
 const STATUS_AWAITING = 'Awaiting signed copy';
@@ -54,7 +54,6 @@ function previewNda() {
     address: '12 Example Road, Salt Lake, Kolkata, West Bengal 700091',
     pan: 'ABCPE1234F',
     mobile: '9800000000',
-    mlid: 'ML-SAMPLE',
     email: '',
   };
   const pdf = renderNdaPdf_(sample, 'XXXX XXXX 0000', CONFIG.REF_PREFIX + '-PREVIEW', new Date());
@@ -85,7 +84,6 @@ function generateNda(input) {
   appendRegisterRow_({
     'Generated At': formatTimestamp_(now),
     'NDA Ref': ref,
-    'MLID': employee.mlid,
     'Full Name': employee.fullName,
     'Mobile': employee.mobile,
     'Email': employee.email,
@@ -111,7 +109,7 @@ function generateNda(input) {
           '1. Print all pages and read the agreement fully.',
           '2. Sign under "Receiving Party" on the last page and initial the bottom of every page, in blue or black ink.',
           '3. Scan or photograph every page clearly.',
-          '4. Upload the signed pages on the NDA portal using your reference number and MLID.',
+          '4. Upload the signed pages on the NDA portal using your reference number and mobile number.',
           '',
           CONFIG.COMPANY_NAME,
         ].join('\n'),
@@ -126,7 +124,7 @@ function generateNda(input) {
   return {
     success: true,
     ref: ref,
-    mlid: employee.mlid,
+    mobile: employee.mobile,
     fileName: pdf.getName(),
     pdfBase64: Utilities.base64Encode(pdf.getBytes()),
     emailed: emailed,
@@ -134,25 +132,27 @@ function generateNda(input) {
 }
 
 /**
- * Called by the page with { ref, mlid, files: [{ name, mimeType, base64 }] }.
- * Stores the scanned, hand-signed pages and marks the NDA as returned.
+ * Called by the page with { ref, mobile, files: [{ name, mimeType, base64 }] }.
+ * Stores the scanned, hand-signed pages and marks the NDA as returned. The reference number
+ * and the mobile number given for that NDA must both match.
  */
 function uploadSignedNda(input) {
   const ref = String((input && input.ref) || '').trim().toUpperCase();
-  const mlid = String((input && input.mlid) || '').trim();
+  const mobile = validators_().rules.mobile(input && input.mobile).value || '';
   const files = (input && input.files) || [];
 
-  if (!ref || !mlid) return { success: false, error: 'Enter your NDA reference number and MLID.' };
+  if (!ref || !mobile) return { success: false, error: 'Enter your NDA reference number and the mobile number you gave for it.' };
   if (!files.length) return { success: false, error: 'Attach the scanned or photographed signed pages.' };
   if (files.length > CONFIG.MAX_UPLOAD_FILES) {
     return { success: false, error: 'Attach at most ' + CONFIG.MAX_UPLOAD_FILES + ' files. Combine pages into one PDF if you have more.' };
   }
 
   const sheet = registerSheet_();
-  const row = findRegisterRow_(sheet, ref);
-  const registeredMlid = row ? String(sheet.getRange(row, column_('MLID')).getValue()).trim() : '';
-  if (!row || registeredMlid.toLowerCase() !== mlid.toLowerCase()) {
-    return { success: false, error: 'No NDA matches that reference number and MLID. Check both and try again.' };
+  const headers = registerHeaders_(sheet);
+  const row = findRegisterRow_(sheet, headers, ref);
+  const registeredMobile = row ? String(sheet.getRange(row, column_(headers, 'Mobile')).getValue()).trim() : '';
+  if (!row || registeredMobile !== mobile) {
+    return { success: false, error: 'No NDA matches that reference number and mobile number. Check both and try again.' };
   }
 
   const now = new Date();
@@ -176,20 +176,20 @@ function uploadSignedNda(input) {
   const urls = blobs.map(function (blob) { return folder.createFile(blob).getUrl(); });
 
   // Re-uploads (e.g. a missed page) are kept alongside earlier ones.
-  const signedCell = sheet.getRange(row, column_('Signed Copy'));
+  const signedCell = sheet.getRange(row, column_(headers, 'Signed Copy'));
   const earlier = String(signedCell.getValue() || '');
   signedCell.setValue((earlier ? earlier + '\n' : '') + urls.join('\n'));
-  sheet.getRange(row, column_('Status')).setValue(STATUS_RECEIVED);
-  sheet.getRange(row, column_('Signed At')).setValue(formatTimestamp_(now));
+  sheet.getRange(row, column_(headers, 'Status')).setValue(STATUS_RECEIVED);
+  sheet.getRange(row, column_(headers, 'Signed At')).setValue(formatTimestamp_(now));
 
   if (CONFIG.HR_EMAIL) {
-    const name = sheet.getRange(row, column_('Full Name')).getValue();
+    const name = sheet.getRange(row, column_(headers, 'Full Name')).getValue();
     try {
       MailApp.sendEmail(
         CONFIG.HR_EMAIL,
         'Signed NDA received: ' + name + ' (' + ref + ')',
         [
-          name + ' (MLID ' + registeredMlid + ') uploaded ' + urls.length + ' file(s) for NDA ' + ref + '.',
+          name + ' (mobile +91 ' + registeredMobile + ') uploaded ' + urls.length + ' file(s) for NDA ' + ref + '.',
           '',
           'Signed copies:',
           urls.join('\n'),
@@ -268,17 +268,27 @@ function startsWith_(bytes, magic) {
   return magic.every(function (b, i) { return (bytes[i] & 0xff) === b; });
 }
 
-function column_(name) {
-  return REGISTER_COLUMNS.indexOf(name) + 1;
+// Columns are found by their heading in row 1, so a register from an earlier version (e.g. one
+// with an unused MLID column) or with columns rearranged by HR keeps working.
+function registerHeaders_(sheet) {
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+}
+
+function column_(headers, name) {
+  const at = headers.indexOf(name);
+  if (at < 0) throw new Error('The NDA register has no "' + name + '" column. Put that heading back in row 1.');
+  return at + 1;
 }
 
 function appendRegisterRow_(record) {
-  const values = REGISTER_COLUMNS.map(function (name) {
+  const sheet = registerSheet_();
+  const headers = registerHeaders_(sheet);
+  REGISTER_COLUMNS.forEach(function (name) { column_(headers, name); }); // every heading must be present
+  const values = headers.map(function (name) {
     const value = record[name] == null ? '' : String(record[name]);
     // Stop text such as "=IMPORTXML(...)" in an address from running as a formula.
     return /^[=+\-@]/.test(value) ? "'" + value : value;
   });
-  const sheet = registerSheet_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -290,10 +300,10 @@ function appendRegisterRow_(record) {
   }
 }
 
-function findRegisterRow_(sheet, ref) {
+function findRegisterRow_(sheet, headers, ref) {
   const rows = sheet.getLastRow() - 1;
   if (rows < 1) return 0;
-  const match = sheet.getRange(2, column_('NDA Ref'), rows, 1)
+  const match = sheet.getRange(2, column_(headers, 'NDA Ref'), rows, 1)
     .createTextFinder(ref)
     .matchEntireCell(true)
     .findNext();

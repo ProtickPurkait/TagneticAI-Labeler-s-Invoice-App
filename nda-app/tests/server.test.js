@@ -13,7 +13,6 @@ function employee(overrides) {
     aadhaar: AADHAAR.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3'),
     pan: 'abcpe1234f',
     mobile: '+91 98765 43210',
-    mlid: 'ML-0042',
     email: '',
     confirmed: true,
   }, overrides);
@@ -87,7 +86,7 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
 
   assert.equal(res.success, true);
   assert.match(res.ref, /^TAI-NDA-\d{6}-[2-9A-HJ-NP-Z]{5}$/);
-  assert.equal(res.mlid, 'ML-0042');
+  assert.equal(res.mobile, '9876543210');
   assert.equal(res.fileName, res.ref + ' - NDA - Rahul Kumar Das.pdf');
   assert.equal(res.emailed, false);
 
@@ -100,7 +99,8 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   assert.ok(html.includes(res.ref));
   assert.match(html, /Disclosing Party: TagneticAI LLP/);
   assert.match(html, /Receiving Party: Rahul Kumar Das/);
-  assert.match(html, /MLID: ML-0042/);
+  assert.match(html, /Mobile: \+91 9876543210/);
+  assert.ok(!/MLID/.test(html));
   assert.match(html, /entered into as of [A-Z][a-z]+ \d{1,2}(st|nd|rd|th), \d{4}, by and between/);
   assert.match(html, /exclusive jurisdiction of the courts in Kolkata, West Bengal/);
   assert.match(html, /<img src="data:image\/png;base64,[A-Za-z0-9+/=]+" alt="TagneticAI">/, 'logo survives template escaping');
@@ -109,7 +109,7 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   assert.ok(!/<img[^>]*alt=""/.test(html), 'no company signature image unless configured');
 
   const row = rowFor(app, res.ref);
-  assert.equal(row['MLID'], 'ML-0042');
+  assert.ok(!('MLID' in row));
   assert.equal(row['Mobile'], '9876543210');
   assert.equal(row['PAN'], 'ABCPE1234F');
   assert.equal(row['Aadhaar'], 'XXXX XXXX ' + AADHAAR.slice(-4));
@@ -119,6 +119,30 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   const generated = app.filesIn('GENERATED_FOLDER_ID');
   assert.equal(generated.length, 1);
   assert.equal(generated[0].name, res.fileName);
+});
+
+test('a register made by the earlier version, with an MLID column, keeps working', () => {
+  const app = readyApp();
+  const rows = app.sheetRows();
+  rows[0] = ['Generated At', 'NDA Ref', 'MLID', 'Full Name', 'Mobile', 'Email', 'Address', 'PAN', 'Aadhaar',
+    'NDA PDF', 'Status', 'Signed Copy', 'Signed At'];
+  const { ref } = app.call('generateNda', employee());
+  let row = rowFor(app, ref);
+  assert.equal(row['MLID'], '');
+  assert.equal(row['Full Name'], 'Rahul Kumar Das');
+  assert.equal(row['Mobile'], '9876543210');
+  assert.equal(row['Status'], 'Awaiting signed copy');
+
+  assert.equal(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] }).success, true);
+  row = rowFor(app, ref);
+  assert.equal(row['Status'], 'Signed copy received');
+  assert.equal(row['MLID'], '');
+});
+
+test('a register with a missing heading fails with a clear message', () => {
+  const app = readyApp();
+  app.sheetRows()[0] = app.sheetRows()[0].filter((h) => h !== 'Mobile');
+  assert.throws(() => app.call('generateNda', employee()), /no "Mobile" column/);
 });
 
 test('MASK_AADHAAR = false prints and stores the full number', () => {
@@ -152,15 +176,16 @@ test('an email copy is sent with the PDF attached when an email is given', () =>
   assert.equal(app.mail[0].attachments[0].getName(), res.fileName);
 });
 
-test('uploadSignedNda checks the reference number and MLID pair', () => {
+test('uploadSignedNda checks the reference number and mobile number pair', () => {
   const app = readyApp();
   const { ref } = app.call('generateNda', employee());
   const files = [fileArg(PDF_BYTES, 'application/pdf')];
 
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-9999', files }).error, /No NDA matches/);
-  assert.match(app.call('uploadSignedNda', { ref: 'TAI-NDA-000000-AAAAA', mlid: 'ML-0042', files }).error, /No NDA matches/);
-  assert.match(app.call('uploadSignedNda', { ref: '', mlid: 'ML-0042', files }).error, /reference number/);
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [] }).error, /Attach/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9123456789', files }).error, /No NDA matches/);
+  assert.match(app.call('uploadSignedNda', { ref: 'TAI-NDA-000000-AAAAA', mobile: '9876543210', files }).error, /No NDA matches/);
+  assert.match(app.call('uploadSignedNda', { ref: '', mobile: '9876543210', files }).error, /reference number/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '12345', files }).error, /mobile number/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [] }).error, /Attach/);
   assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
 });
 
@@ -168,15 +193,15 @@ test('uploadSignedNda rejects files that are not really PDF/JPG/PNG, and oversiz
   const app = readyApp();
   const { ref } = app.call('generateNda', employee());
   const fake = fileArg(Buffer.from('MZ\x90\x00 not a pdf'), 'application/pdf', 'virus.pdf');
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fake] }).error, /"virus.pdf" is not a PDF/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fake] }).error, /"virus.pdf" is not a PDF/);
   const gif = fileArg(Buffer.from('GIF89a'), 'image/gif', 'x.gif');
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [gif] }).error, /not a PDF, JPG or PNG/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [gif] }).error, /not a PDF, JPG or PNG/);
 
   const seven = Array.from({ length: 7 }, () => fileArg(PDF_BYTES, 'application/pdf'));
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: seven }).error, /at most 6 files/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: seven }).error, /at most 6 files/);
 
   app.eval('CONFIG.MAX_UPLOAD_MB = 0.00001');
-  assert.match(app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] }).error, /larger than/);
+  assert.match(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] }).error, /larger than/);
   assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
 });
 
@@ -186,7 +211,7 @@ test('uploadSignedNda stores the pages, updates the register, and keeps re-uploa
 
   const first = app.call('uploadSignedNda', {
     ref: ref.toLowerCase(), // typed in lower case
-    mlid: 'ml-0042',
+    mobile: '+91 98765-43210', // typed differently from the form
     files: [fileArg(JPEG_BYTES, 'image/jpeg', 'p1.jpg'), fileArg(JPEG_BYTES, 'image/jpeg', 'p2.jpg')],
   });
   assert.deepEqual(first, { success: true, ref, count: 2 });
@@ -200,7 +225,7 @@ test('uploadSignedNda stores the pages, updates the register, and keeps re-uploa
   assert.equal(signed.length, 2);
   signed.forEach((f) => assert.match(f.name, new RegExp('^' + ref + '_signed_\\d{8}-\\d{6}_[12]\\.jpg$')));
 
-  app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] });
+  app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] });
   row = rowFor(app, ref);
   assert.equal(row['Signed Copy'].split('\n').length, 3);
   assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 3);
@@ -211,11 +236,11 @@ test('HR is emailed about signed copies when HR_EMAIL is set', () => {
   const app = readyApp();
   app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'");
   const { ref } = app.call('generateNda', employee());
-  app.call('uploadSignedNda', { ref, mlid: 'ML-0042', files: [fileArg(PDF_BYTES, 'application/pdf')] });
+  app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] });
   assert.equal(app.mail.length, 1);
   assert.equal(app.mail[0].to, 'hr@tagneticai.com');
   assert.match(app.mail[0].subject, /Signed NDA received: Rahul Kumar Das/);
-  assert.match(app.mail[0].body, /MLID ML-0042/);
+  assert.match(app.mail[0].body, /mobile \+91 9876543210/);
 });
 
 test('the NDA date uses the "June 17th, 2026" style', () => {

@@ -3,13 +3,9 @@
  *
  * Code.gs calls this directly. Index.html inlines this same function's source
  * (buildValidators_.toString()), so the form and the server always apply identical
- * rules. Keep it self-contained: no Apps Script services and no references to CONFIG
- * (pass settings in through `options`).
+ * rules. Keep it self-contained: no Apps Script services and no references to CONFIG.
  */
-function buildValidators_(options) {
-  var mlidPattern = new RegExp(options.mlidPattern);
-  var mlidHint = options.mlidHint;
-
+function buildValidators_() {
   // Verhoeff checksum tables. The last digit of every Aadhaar number is a Verhoeff check digit.
   var D = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -90,13 +86,6 @@ function buildValidators_(options) {
       return { value: v };
     },
 
-    mlid: function (raw) {
-      var v = String(raw == null ? '' : raw).trim();
-      if (!v) return { error: 'Enter your MLID.' };
-      if (!mlidPattern.test(v)) return { error: 'That does not look like a valid MLID. ' + mlidHint };
-      return { value: v };
-    },
-
     // Optional: only used to email the employee a copy.
     email: function (raw) {
       var v = String(raw == null ? '' : raw).trim();
@@ -134,12 +123,6 @@ function buildValidators_(options) {
   };
 }
 
-function validatorOptions_() {
-  return { mlidPattern: CONFIG.MLID_PATTERN, mlidHint: CONFIG.MLID_HINT };
-}
-
-// Built on demand rather than at load time: Apps Script runs .gs files in project order,
-// so CONFIG may not exist yet when this file's top level runs.
 function validators_() {
-  return buildValidators_(validatorOptions_());
+  return buildValidators_();
 }
