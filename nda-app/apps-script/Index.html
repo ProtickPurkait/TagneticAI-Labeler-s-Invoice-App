@@ -9,6 +9,7 @@
     @media (max-width: 576px) { .portal-container { padding: 24px 18px; } body { padding: 16px 10px; } }
     .steps { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; font-size: 14px; }
     .steps span { background: #eef3ff; color: #0d6efd; border-radius: 20px; padding: 4px 12px; }
+    .brand-logo { height: 64px; max-width: 100%; }
     .ref-box { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.25rem; letter-spacing: 1px; }
     #pan { text-transform: uppercase; }
     .file-list { font-size: 14px; }
@@ -18,7 +19,7 @@
 
   <div class="portal-container">
     <div class="text-center mb-4">
-      <h2 class="text-dark fw-bold"><?= CONFIG.COMPANY_NAME ?></h2>
+      <h1 class="mb-2"><img src="<?= ASSETS.logoBadge ?>" alt="<?= CONFIG.COMPANY_NAME ?>" class="brand-logo"></h1>
       <p class="text-muted mb-3">Employee Non-Disclosure Agreement Portal</p>
       <div class="steps">
         <span>1. Enter your details</span><span>2. Download, print &amp; sign</span><span>3. Upload signed copy</span>

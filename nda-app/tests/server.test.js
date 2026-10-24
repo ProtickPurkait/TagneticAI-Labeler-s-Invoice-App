@@ -49,6 +49,7 @@ test('doGet serves the portal and allows framing by the Netlify page', () => {
   assert.equal(page.xFrameOptionsMode, 'ALLOWALL');
   assert.equal(page.title, 'TagneticAI NDA Portal');
   assert.match(page.getContent(), /Employee Non-Disclosure Agreement Portal/);
+  assert.match(page.getContent(), /<img src="data:image\/png;base64,[A-Za-z0-9+/=]+" alt="TagneticAI" class="brand-logo">/);
   assert.match(page.getContent(), /Only the last 4 digits are printed and stored/);
 });
 

@@ -153,11 +153,16 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
 
 Your Canva NDAs go out already stamped and signed by the Designated Partner. The portal can do the same:
 
-1. Make a PNG of the stamp and signature on a transparent background, e.g. export just those two
-   elements from Canva with *Transparent background* ticked.
+1. Make a PNG of the signature (and stamp, if you use one) on a transparent background. A photo of the
+   signature works once the paper is removed, or export just those elements from Canva with
+   *Transparent background* ticked.
 2. Upload it to the *TagneticAI NDAs* Drive folder. Open it, and copy the file ID from the link
    (`https://drive.google.com/file/d/`**`THIS-PART`**`/view`).
-3. Paste the ID into `COMPANY_SIGNATURE_FILE_ID` in `Config.gs` and deploy a new version.
+3. Paste the ID into `COMPANY_SIGNATURE_FILE_ID` in `Config.gs`, run `previewNda` to check it, and
+   deploy a new version.
+
+The signature stays in your private Drive. Don't add it to this repository: the repository is public,
+and anything committed stays downloadable in its history.
 
 The trade-off: anyone who has the portal link can then produce a company-signed NDA in any name.
 If you'd rather not, leave it blank. The *Disclosing Party* box stays empty, and you sign it by hand
