@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!--
+  The invoice document. Code.gs fills it in and converts it to PDF. Edit the layout freely, but keep the
+  placeholder tags (the ones that start with "<" + "?="); Apps Script fills them in and HTML-escapes
+  their values. The logo and signature use the raw tag ("<" + "?!=") instead, because the escaping tag
+  blanks out embedded images; Code.gs checks them first.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4; margin: 14mm 14mm 14mm 14mm; }
+    body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #222222; font-size: 10pt; line-height: 1.35; }
+    .head { width: 100%; border-collapse: collapse; }
+    .head td { vertical-align: top; }
+    .logo img { height: 40pt; }
+    .title { text-align: right; }
+    .title h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; color: #6a25d0; font-size: 28pt; margin: 0 0 4pt; }
+    .meta { font-size: 9.5pt; margin: 0; }
+    .rule { border-top: 2pt solid #6a25d0; margin: 10pt 0 12pt; }
+    .parties { width: 100%; border-collapse: collapse; margin-bottom: 14pt; }
+    .parties td { width: 50%; vertical-align: top; padding-right: 14pt; }
+    .label { font-weight: bold; font-size: 8.5pt; color: #6a25d0; text-transform: uppercase; margin: 0 0 3pt; }
+    .party-name { font-weight: bold; font-size: 11pt; margin: 0 0 2pt; }
+    .small { font-size: 9pt; margin: 0 0 2pt; }
+    .items { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+    .items th { background: #6a25d0; color: #ffffff; font-size: 9pt; text-align: left; padding: 5pt 6pt; }
+    .items td { border-bottom: 1pt solid #dddddd; padding: 5pt 6pt; vertical-align: top; font-size: 9.5pt; }
+    .r { text-align: right; }
+    .totals { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+    .totals td { padding: 3pt 6pt; font-size: 10pt; }
+    .totals .spacer { width: 55%; }
+    .totals .grand td { border-top: 1.5pt solid #222222; font-weight: bold; font-size: 11.5pt; padding-top: 5pt; }
+    .words { font-size: 9.5pt; margin: 4pt 0 14pt; }
+    .lower { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+    .lower td { vertical-align: top; width: 50%; padding-right: 14pt; }
+    .sign-space { height: 56pt; text-align: right; }
+    .sign-space img { max-height: 56pt; max-width: 100%; }
+    .sign-rule { border-top: 1pt solid #222222; text-align: right; font-size: 9pt; padding-top: 3pt; }
+    .terms { font-size: 8.5pt; color: #555555; margin-top: 12pt; }
+    .terms p { margin: 0 0 2pt; }
+  </style>
+</head>
+<body>
+  <table class="head"><tr>
+    <td class="logo"><img src="<?!= assets.logoBadge ?>" alt="<?= company.legalName ?>"></td>
+    <td class="title">
+      <h1><? if (taxed) { ?>Tax Invoice<? } else { ?>Invoice<? } ?></h1>
+      <p class="meta"><strong>Invoice no:</strong> <?= number ?></p>
+      <p class="meta"><strong>Date:</strong> <?= dateText ?></p>
+      <p class="meta"><strong>Due date:</strong> <?= dueText ?></p>
+    </td>
+  </tr></table>
+  <div class="rule"></div>
+
+  <table class="parties"><tr>
+    <td>
+      <p class="label">From</p>
+      <p class="party-name"><?= company.legalName ?></p>
+      <p class="small"><?= company.address ?></p>
+      <? if (company.gstin) { ?><p class="small">GSTIN: <?= company.gstin ?></p><? } ?>
+      <? if (company.pan) { ?><p class="small">PAN: <?= company.pan ?></p><? } ?>
+      <? if (company.email) { ?><p class="small"><?= company.email ?></p><? } ?>
+    </td>
+    <td>
+      <p class="label">Bill to</p>
+      <p class="party-name"><?= invoice.clientName ?></p>
+      <p class="small"><?= invoice.clientAddress ?></p>
+      <? if (invoice.clientGstin) { ?><p class="small">GSTIN: <?= invoice.clientGstin ?></p><? } ?>
+    </td>
+  </tr></table>
+
+  <table class="items">
+    <tr>
+      <th style="width:6%">#</th>
+      <th>Description</th>
+      <? if (hasSac) { ?><th style="width:12%">HSN/SAC</th><? } ?>
+      <th class="r" style="width:14%">Qty</th>
+      <th class="r" style="width:15%">Rate (<?= currency ?>)</th>
+      <th class="r" style="width:17%">Amount (<?= currency ?>)</th>
+    </tr>
+    <? for (var i = 0; i < rows.length; i++) { ?>
+    <tr>
+      <td><?= rows[i].n ?></td>
+      <td><?= rows[i].description ?></td>
+      <? if (hasSac) { ?><td><?= rows[i].sac ?></td><? } ?>
+      <td class="r"><?= rows[i].quantity ?></td>
+      <td class="r"><?= rows[i].rate ?></td>
+      <td class="r"><?= rows[i].amount ?></td>
+    </tr>
+    <? } ?>
+  </table>
+
+  <table class="totals">
+    <tr><td class="spacer"></td><td>Subtotal</td><td class="r"><?= subtotal ?></td></tr>
+    <? for (var t = 0; t < taxLines.length; t++) { ?>
+    <tr><td class="spacer"></td><td><?= taxLines[t].label ?></td><td class="r"><?= taxLines[t].amount ?></td></tr>
+    <? } ?>
+    <? if (roundOff) { ?><tr><td class="spacer"></td><td>Round off</td><td class="r"><?= roundOff ?></td></tr><? } ?>
+    <tr class="grand"><td class="spacer" style="border-top:none"></td><td>Total (<?= currency ?>)</td><td class="r"><?= total ?></td></tr>
+  </table>
+  <p class="words"><strong>Amount in words:</strong> <?= words ?></p>
+
+  <? if (invoice.notes) { ?>
+  <p class="label">Notes</p>
+  <p class="small" style="white-space:pre-line; margin-bottom:12pt"><?= invoice.notes ?></p>
+  <? } ?>
+
+  <table class="lower"><tr>
+    <td>
+      <? if (company.bank.length) { ?>
+      <p class="label">Pay to</p>
+      <? for (var b = 0; b < company.bank.length; b++) { ?><p class="small"><?= company.bank[b] ?></p><? } ?>
+      <? } ?>
+    </td>
+    <td>
+      <p class="small r">For <strong><?= company.legalName ?></strong></p>
+      <div class="sign-space"><? if (company.signatureImage) { ?><img src="<?!= company.signatureImage ?>" alt="Signature"><? } ?></div>
+      <div class="sign-rule">Authorised signatory</div>
+    </td>
+  </tr></table>
+
+  <? if (company.terms.length) { ?>
+  <div class="terms">
+    <p class="label">Terms</p>
+    <? for (var k = 0; k < company.terms.length; k++) { ?><p><?= company.terms[k] ?></p><? } ?>
+  </div>
+  <? } ?>
+</body>
+</html>

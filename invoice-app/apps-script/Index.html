@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f4f6f9; padding: 30px 15px; }
+    .portal-container { max-width: 960px; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin: auto; }
+    @media (max-width: 576px) { .portal-container { padding: 24px 18px; } body { padding: 16px 10px; } }
+    .brand-logo { height: 64px; max-width: 100%; }
+    .ref-box { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.25rem; letter-spacing: 1px; }
+    .item-card { border: 1px solid #dee2e6; border-radius: 8px; padding: 12px; background: #fafbfd; }
+    .totals td { padding: 2px 0; }
+    #clientGstin { text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+  <div class="portal-container">
+    <div class="text-center mb-4">
+      <h1 class="mb-2"><img src="<?!= imageDataUri_(ASSETS.logoBadge) ?>" alt="<?= CONFIG.COMPANY_NAME ?>" class="brand-logo"></h1>
+      <p class="text-muted mb-0">Client Invoice Generator</p>
+    </div>
+    <hr class="mb-4">
+
+    <form id="invoiceForm" novalidate>
+      <? if (CONFIG.ACCESS_CODE) { ?>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label" for="accessCode">Access code</label>
+          <input type="password" class="form-control" id="accessCode" autocomplete="off">
+          <div class="invalid-feedback"></div>
+        </div>
+      </div>
+      <? } ?>
+
+      <h5 class="mb-3 text-primary">1. Client</h5>
+      <div class="row g-3 mb-4">
+        <div class="col-12">
+          <label class="form-label" for="clientName">Client name</label>
+          <input type="text" class="form-control" id="clientName" autocomplete="off">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="clientAddress">Billing address</label>
+          <textarea class="form-control" id="clientAddress" rows="2" autocomplete="off"></textarea>
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="clientGstin">Client GSTIN <span class="text-muted">(optional)</span></label>
+          <input type="text" class="form-control" id="clientGstin" maxlength="15" autocomplete="off" placeholder="22AAAAA0000A1Z5">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="clientEmail">Client email <span class="text-muted">(optional)</span></label>
+          <input type="email" class="form-control" id="clientEmail" autocomplete="off">
+          <div class="invalid-feedback"></div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="emailClient">
+            <label class="form-check-label small" for="emailClient">Email the invoice to the client</label>
+          </div>
+        </div>
+      </div>
+
+      <h5 class="mb-3 text-primary">2. Invoice details</h5>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+          <label class="form-label" for="invoiceDate">Invoice date</label>
+          <input type="date" class="form-control" id="invoiceDate">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label" for="dueDays">Days to pay</label>
+          <input type="number" class="form-control" id="dueDays" min="0" max="180" value="<?= CONFIG.DEFAULT_DUE_DAYS ?>">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label" for="currency">Currency</label>
+          <select class="form-select" id="currency">
+            <option value="INR">INR (&#8377;)</option>
+            <option value="USD">USD ($)</option>
+          </select>
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-3 col-6">
+          <label class="form-label" for="gstRate">GST rate (%)</label>
+          <input type="number" class="form-control" id="gstRate" min="0" max="40" step="0.01" value="<?= CONFIG.DEFAULT_GST_RATE ?>">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="taxMode">GST type</label>
+          <select class="form-select" id="taxMode">
+            <option value="intra">Same state as us: CGST + SGST</option>
+            <option value="inter">Other state: IGST</option>
+            <option value="none">No GST (export under LUT, exempt, or not registered)</option>
+          </select>
+          <div class="invalid-feedback"></div>
+        </div>
+      </div>
+
+      <h5 class="mb-3 text-primary">3. Line items</h5>
+      <div id="items" class="d-grid gap-3 mb-2"></div>
+      <div class="invalid-feedback d-block mb-2" id="itemsError"></div>
+      <button type="button" class="btn btn-outline-primary btn-sm mb-4" id="btnAddItem">+ Add line item</button>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-7">
+          <label class="form-label" for="notes">Notes <span class="text-muted">(optional, printed on the invoice)</span></label>
+          <textarea class="form-control" id="notes" rows="3" maxlength="500" placeholder="e.g. Project name, PO number, billing period"></textarea>
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-5">
+          <table class="totals w-100 mt-md-4">
+            <tr><td>Subtotal</td><td class="text-end" id="tSubtotal">0.00</td></tr>
+            <tr id="rowCgst"><td id="lblCgst">CGST</td><td class="text-end" id="tCgst">0.00</td></tr>
+            <tr id="rowSgst"><td id="lblSgst">SGST</td><td class="text-end" id="tSgst">0.00</td></tr>
+            <tr id="rowIgst"><td id="lblIgst">IGST</td><td class="text-end" id="tIgst">0.00</td></tr>
+            <tr id="rowRound"><td>Round off</td><td class="text-end" id="tRound">0.00</td></tr>
+            <tr class="fw-bold fs-5 border-top"><td>Total</td><td class="text-end" id="tTotal">0.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100 py-3 fs-5" id="btnGenerate">🧾 Generate Invoice</button>
+    </form>
+
+    <div id="generateAlert" class="mt-4 alert d-none" role="alert"></div>
+
+    <div id="resultPanel" class="mt-4 d-none">
+      <div class="alert alert-success mb-3">
+        <div class="mb-1">🎉 <strong>Invoice issued.</strong> Invoice number:</div>
+        <div class="ref-box fw-bold" id="resultNumber"></div>
+        <div class="small mt-1">Total: <span id="resultTotal"></span>. Filed in Drive and logged in the register.</div>
+        <div class="small mt-1 d-none" id="resultEmailed">✉️ A copy has been emailed to the client.</div>
+      </div>
+      <a id="downloadLink" class="btn btn-success w-100 py-3 fs-5 mb-2" href="#">⬇️ Download invoice (PDF)</a>
+      <button type="button" class="btn btn-outline-secondary w-100" id="btnNew">Start a new invoice</button>
+    </div>
+  </div>
+
+  <script>
+    // Same rules and arithmetic as the server (Invoice.gs), inlined when this page is served.
+    const Lib = (<?!= buildInvoiceLib_.toString() ?>)();
+    const DEFAULTS = <?!= jsonForScript_({ sac: CONFIG.DEFAULT_SAC, accessCode: !!CONFIG.ACCESS_CODE, gstRate: CONFIG.DEFAULT_GST_RATE, dueDays: CONFIG.DEFAULT_DUE_DAYS }) ?>;
+    const FIELDS = ['clientName', 'clientAddress', 'clientGstin', 'clientEmail', 'invoiceDate', 'dueDays', 'currency', 'taxMode', 'gstRate', 'notes'];
+    const ITEM_FIELDS = ['description', 'sac', 'quantity', 'unit', 'rate'];
+
+    const $ = id => document.getElementById(id);
+    let downloadUrl = null;
+
+    function todayLocalIso() {
+      const d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+
+    // ---------- Line items ----------
+
+    function addItem() {
+      const card = document.createElement('div');
+      card.className = 'item-card';
+      card.innerHTML =
+        '<div class="row g-2">' +
+        '<div class="col-12"><label class="form-label small mb-1">Description</label><input type="text" class="form-control" data-f="description" placeholder="e.g. Image annotation, bounding boxes"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-3"><label class="form-label small mb-1">HSN/SAC</label><input type="text" class="form-control" data-f="sac" inputmode="numeric" maxlength="8"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Quantity</label><input type="number" class="form-control" data-f="quantity" min="0" step="any" value="1"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Unit</label><input type="text" class="form-control" data-f="unit" maxlength="20" placeholder="images, hours"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Rate</label><input type="number" class="form-control" data-f="rate" min="0" step="any"><div class="invalid-feedback"></div></div>' +
+        '</div>' +
+        '<div class="d-flex justify-content-between align-items-center mt-2"><span class="small text-muted">Amount: <strong data-amount>0.00</strong></span>' +
+        '<button type="button" class="btn btn-sm btn-link text-danger p-0" data-remove>Remove</button></div>';
+      card.querySelector('[data-f="sac"]').value = DEFAULTS.sac || '';
+      card.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', () => { input.classList.remove('is-invalid'); updateTotals(); });
+      });
+      card.querySelector('[data-remove]').addEventListener('click', () => {
+        if ($('items').children.length > 1) { card.remove(); updateTotals(); }
+      });
+      $('items').appendChild(card);
+    }
+
+    function readItem(card) {
+      const item = {};
+      ITEM_FIELDS.forEach(f => { item[f] = card.querySelector('[data-f="' + f + '"]').value; });
+      return item;
+    }
+
+    function readItems() {
+      return Array.from($('items').children).map(readItem);
+    }
+
+    // ---------- Live totals ----------
+
+    function updateTotals() {
+      const currency = $('currency').value;
+      const taxMode = $('taxMode').value;
+      const rate = Number($('gstRate').value) || 0;
+      const valid = [];
+      Array.from($('items').children).forEach(card => {
+        const result = Lib.validateItem(readItem(card));
+        const amount = result.value ? Lib.lineAmount(result.value.quantity, result.value.rateMinor) : 0;
+        card.querySelector('[data-amount]').textContent = Lib.formatMoney(amount, currency);
+        if (result.value) valid.push(result.value);
+      });
+      const t = Lib.computeTotals(valid, taxMode, rate, currency);
+      const money = m => Lib.formatMoney(m, currency);
+      $('tSubtotal').textContent = money(t.subtotal);
+      $('lblCgst').textContent = 'CGST @ ' + rate / 2 + '%';
+      $('lblSgst').textContent = 'SGST @ ' + rate / 2 + '%';
+      $('lblIgst').textContent = 'IGST @ ' + rate + '%';
+      $('tCgst').textContent = money(t.cgst);
+      $('tSgst').textContent = money(t.sgst);
+      $('tIgst').textContent = money(t.igst);
+      $('tRound').textContent = money(t.roundOff);
+      $('tTotal').textContent = Lib.CURRENCIES[currency].symbol + ' ' + money(t.total);
+      $('rowCgst').classList.toggle('d-none', taxMode !== 'intra');
+      $('rowSgst').classList.toggle('d-none', taxMode !== 'intra');
+      $('rowIgst').classList.toggle('d-none', taxMode !== 'inter');
+      $('rowRound').classList.toggle('d-none', !t.roundOff);
+      $('gstRate').disabled = taxMode === 'none';
+    }
+
+    // ---------- Validation and submit ----------
+
+    function showFieldError(field, message) {
+      const input = $(field);
+      input.classList.add('is-invalid');
+      const box = input.parentElement.querySelector('.invalid-feedback');
+      if (box) box.textContent = message;
+    }
+
+    function checkField(field) {
+      const result = Lib.rules[field]($(field).value);
+      if (result.error) { showFieldError(field, result.error); return false; }
+      if (field === 'clientGstin') $(field).value = result.value;
+      $(field).classList.remove('is-invalid');
+      return true;
+    }
+
+    function checkItems() {
+      let ok = true;
+      Array.from($('items').children).forEach(card => {
+        const result = Lib.validateItem(readItem(card));
+        card.querySelectorAll('input').forEach(i => i.classList.remove('is-invalid'));
+        if (result.errors) {
+          ok = false;
+          Object.keys(result.errors).forEach(f => {
+            const input = card.querySelector('[data-f="' + f + '"]');
+            input.classList.add('is-invalid');
+            input.parentElement.querySelector('.invalid-feedback').textContent = result.errors[f];
+          });
+        }
+      });
+      return ok;
+    }
+
+    function generate(e) {
+      e.preventDefault();
+      hide('generateAlert');
+      $('itemsError').textContent = '';
+
+      let firstInvalid = null;
+      FIELDS.forEach(field => {
+        if (!checkField(field) && !firstInvalid) firstInvalid = $(field);
+      });
+      if (!checkItems() && !firstInvalid) firstInvalid = document.querySelector('#items .is-invalid');
+      if (DEFAULTS.accessCode && !$('accessCode').value.trim()) {
+        showFieldError('accessCode', 'Enter the access code.');
+        firstInvalid = firstInvalid || $('accessCode');
+      }
+      if (firstInvalid) { firstInvalid.focus(); return; }
+
+      const payload = { items: readItems(), emailClient: $('emailClient').checked };
+      FIELDS.forEach(field => { payload[field] = $(field).value; });
+      if (DEFAULTS.accessCode) payload.accessCode = $('accessCode').value;
+
+      setBusy('btnGenerate', true, 'Creating invoice…');
+      callServer('generateInvoice', payload)
+        .then(response => {
+          if (!response.success) {
+            if (response.accessCodeInvalid) showFieldError('accessCode', response.error);
+            if (response.errors) Object.keys(response.errors).forEach(f => {
+              if ($(f)) showFieldError(f, response.errors[f]);
+              else if (f === 'items') $('itemsError').textContent = response.errors[f];
+            });
+            showAlert('generateAlert', 'danger', escapeHtml(response.error || 'Please fix the highlighted fields.'));
+            return;
+          }
+          showResult(response);
+        })
+        .catch(err => showAlert('generateAlert', 'danger', escapeHtml('Something went wrong: ' + err.message + ' Please try again.')))
+        .finally(() => setBusy('btnGenerate', false, '🧾 Generate Invoice'));
+    }
+
+    function showResult(response) {
+      const bytes = Uint8Array.from(atob(response.pdfBase64), c => c.charCodeAt(0));
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+      downloadUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      $('downloadLink').href = downloadUrl;
+      $('downloadLink').download = response.fileName;
+      $('resultNumber').textContent = response.number;
+      $('resultTotal').textContent = $('currency').value + ' ' + response.total;
+      $('resultEmailed').classList.toggle('d-none', !response.emailed);
+      $('resultPanel').classList.remove('d-none');
+      $('btnGenerate').disabled = true; // one click, one invoice: start a new one to issue another
+      $('resultPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function startNew() {
+      $('invoiceForm').reset();
+      $('invoiceDate').value = todayLocalIso();
+      $('items').innerHTML = '';
+      addItem();
+      updateTotals();
+      hide('resultPanel');
+      hide('generateAlert');
+      $('btnGenerate').disabled = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    FIELDS.forEach(field => {
+      $(field).addEventListener('input', () => $(field).classList.remove('is-invalid'));
+      $(field).addEventListener('blur', () => { if ($(field).value.trim()) checkField(field); });
+    });
+    ['currency', 'taxMode', 'gstRate'].forEach(id => $(id).addEventListener('input', updateTotals));
+    $('btnAddItem').addEventListener('click', () => { addItem(); updateTotals(); });
+    $('btnNew').addEventListener('click', startNew);
+    $('invoiceForm').addEventListener('submit', generate);
+    startNew();
+
+    // ---------- Helpers ----------
+
+    function callServer(functionName, arg) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[functionName](arg);
+      });
+    }
+
+    function setBusy(buttonId, busy, label) {
+      $(buttonId).disabled = busy;
+      $(buttonId).textContent = label;
+    }
+
+    function showAlert(id, type, html) {
+      const box = $(id);
+      box.className = 'mt-4 alert alert-' + type;
+      box.innerHTML = html;
+    }
+
+    function hide(id) {
+      $(id).classList.add('d-none');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
