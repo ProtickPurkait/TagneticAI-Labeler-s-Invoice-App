@@ -10,81 +10,83 @@
   <meta charset="utf-8">
   <style>
     @page { size: A4; margin: 14mm 14mm 14mm 14mm; }
-    body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #222222; font-size: 10pt; line-height: 1.35; }
-    .head { width: 100%; border-collapse: collapse; }
-    .head td { vertical-align: top; }
-    .logo img { height: 40pt; }
-    .title { text-align: right; }
-    .title h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: normal; color: #6a25d0; font-size: 28pt; margin: 0 0 4pt; }
-    .meta { font-size: 9.5pt; margin: 0; }
-    .rule { border-top: 2pt solid #6a25d0; margin: 10pt 0 12pt; }
-    .parties { width: 100%; border-collapse: collapse; margin-bottom: 14pt; }
-    .parties td { width: 50%; vertical-align: top; padding-right: 14pt; }
-    .label { font-weight: bold; font-size: 8.5pt; color: #6a25d0; text-transform: uppercase; margin: 0 0 3pt; }
-    .party-name { font-weight: bold; font-size: 11pt; margin: 0 0 2pt; }
-    .small { font-size: 9pt; margin: 0 0 2pt; }
-    .items { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
-    .items th { background: #6a25d0; color: #ffffff; font-size: 9pt; text-align: left; padding: 5pt 6pt; }
-    .items td { border-bottom: 1pt solid #dddddd; padding: 5pt 6pt; vertical-align: top; font-size: 9.5pt; }
-    .r { text-align: right; }
-    .totals { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
-    .totals td { padding: 3pt 6pt; font-size: 10pt; }
-    .totals .spacer { width: 55%; }
-    .totals .grand td { border-top: 1.5pt solid #222222; font-weight: bold; font-size: 11.5pt; padding-top: 5pt; }
-    .words { font-size: 9.5pt; margin: 4pt 0 14pt; }
-    .lower { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
-    .lower td { vertical-align: top; width: 50%; padding-right: 14pt; }
-    .sign-space { height: 56pt; text-align: right; }
-    .sign-space img { max-height: 56pt; max-width: 100%; }
-    .sign-rule { border-top: 1pt solid #222222; text-align: right; font-size: 9pt; padding-top: 3pt; }
-    .terms { font-size: 8.5pt; color: #555555; margin-top: 12pt; }
-    .terms p { margin: 0 0 2pt; }
+    body { margin: 0; font-family: 'DejaVu Sans Condensed', 'Helvetica Neue', Arial, sans-serif; color: #333333; font-size: 9.5pt; line-height: 1.4; }
+    .logo { text-align: right; margin-bottom: 22pt; }
+    .logo img { height: 22pt; }
+    .parties { width: 100%; border-collapse: collapse; margin-bottom: 22pt; }
+    .parties td { width: 50%; vertical-align: top; }
+    .parties .right { text-align: right; }
+    .parties p { margin: 0; }
+    .parties .gap { margin-top: 10pt; }
+    .meta { width: 100%; border-collapse: collapse; margin-bottom: 18pt; }
+    .meta td { padding: 2pt 0; font-size: 8.5pt; }
+    .meta .k { text-align: right; width: 72%; padding-right: 24pt; }
+    .meta .v { text-align: right; }
+    h1 { font-weight: normal; color: #3b5ccc; font-size: 20pt; margin: 0 0 14pt; }
+    .items { width: 100%; border-collapse: collapse; margin-bottom: 18pt; }
+    .items th { font-size: 8.5pt; text-align: left; padding: 6pt 8pt; border-bottom: 1pt solid #333333; }
+    .items td { padding: 8pt; vertical-align: top; font-size: 8.5pt; }
+    .items tr.odd td { background: #f5f5f5; }
+    .r, .items th.r { text-align: right; }
+    .unit { font-size: 7pt; display: block; }
+    .totals { width: 100%; border-collapse: collapse; }
+    .totals th { text-align: right; font-size: 8.5pt; padding: 0 8pt 4pt 0; }
+    .totals td { padding: 7pt 8pt; font-size: 8.5pt; }
+    .totals .k { text-align: right; width: 78%; }
+    .totals .v { text-align: right; }
+    .totals tr.odd td { background: #f5f5f5; }
+    .totals tr.first td { border-top: 1pt solid #333333; }
+    .totals tr.last td { border-bottom: 1pt solid #333333; }
+    .strong td { font-weight: bold; }
+    .block { margin-top: 18pt; page-break-inside: avoid; }
+    .label { font-weight: bold; font-size: 8.5pt; margin: 0 0 2pt; }
+    .small { font-size: 8.5pt; margin: 0 0 2pt; }
+    .sign-space { height: 50pt; text-align: right; }
+    .sign-space img { max-height: 50pt; max-width: 100%; }
   </style>
 </head>
 <body>
-  <table class="head"><tr>
-    <td class="logo"><img src="<?!= assets.logoBadge ?>" alt="<?= company.legalName ?>"></td>
-    <td class="title">
-      <h1><? if (taxed) { ?>Tax Invoice<? } else { ?>Invoice<? } ?></h1>
-      <p class="meta"><strong>Invoice no:</strong> <?= number ?></p>
-      <p class="meta"><strong>Date:</strong> <?= dateText ?></p>
-      <p class="meta"><strong>Due date:</strong> <?= dueText ?></p>
-    </td>
-  </tr></table>
-  <div class="rule"></div>
+  <div class="logo"><img src="<?!= assets.logoBadge ?>" alt="<?= company.legalName ?>"></div>
 
   <table class="parties"><tr>
     <td>
-      <p class="label">From</p>
-      <p class="party-name"><?= company.legalName ?></p>
-      <p class="small"><?= company.address ?></p>
-      <? if (company.gstin) { ?><p class="small">GSTIN: <?= company.gstin ?></p><? } ?>
-      <? if (company.pan) { ?><p class="small">PAN: <?= company.pan ?></p><? } ?>
-      <? if (company.email) { ?><p class="small"><?= company.email ?></p><? } ?>
+      <p><strong><?= invoice.clientName ?></strong></p>
+      <? for (var a = 0; a < clientLines.length; a++) { ?><p><?= clientLines[a] ?></p><? } ?>
+      <? if (invoice.clientGstin) { ?><p>GSTIN: <?= invoice.clientGstin ?></p><? } ?>
+      <? if (invoice.clientPhone) { ?><p class="gap">P: <?= invoice.clientPhone ?></p><? } ?>
     </td>
-    <td>
-      <p class="label">Bill to</p>
-      <p class="party-name"><?= invoice.clientName ?></p>
-      <p class="small"><?= invoice.clientAddress ?></p>
-      <? if (invoice.clientGstin) { ?><p class="small">GSTIN: <?= invoice.clientGstin ?></p><? } ?>
+    <td class="right">
+      <p><strong><?= company.legalName ?></strong></p>
+      <? for (var c = 0; c < company.addressLines.length; c++) { ?><p><?= company.addressLines[c] ?></p><? } ?>
+      <? if (company.gstin) { ?><p>GSTIN: <?= company.gstin ?></p><? } ?>
+      <? if (company.pan) { ?><p>PAN: <?= company.pan ?></p><? } ?>
+      <? if (company.email) { ?><p><?= company.email ?></p><? } ?>
+      <? if (company.phone) { ?><p class="gap">P: <?= company.phone ?></p><? } ?>
     </td>
   </tr></table>
 
+  <table class="meta">
+    <tr><td class="k">Invoice Date:</td><td class="v"><?= dateText ?></td></tr>
+    <tr><td class="k">Due Date:</td><td class="v"><?= dueText ?></td></tr>
+    <tr><td class="k">Amount Due:</td><td class="v"><?= balance ?></td></tr>
+    <tr><td class="k">Payment Method:</td><td class="v"><?= invoice.paymentMethod ?></td></tr>
+  </table>
+
+  <h1>Invoice <?= number ?></h1>
+
   <table class="items">
     <tr>
-      <th style="width:6%">#</th>
+      <th style="width:22%">Item</th>
       <th>Description</th>
-      <? if (hasSac) { ?><th style="width:12%">HSN/SAC</th><? } ?>
       <th class="r" style="width:14%">Qty</th>
-      <th class="r" style="width:15%">Rate (<?= currency ?>)</th>
-      <th class="r" style="width:17%">Amount (<?= currency ?>)</th>
+      <th class="r" style="width:13%">Price</th>
+      <th class="r" style="width:14%">Total</th>
     </tr>
     <? for (var i = 0; i < rows.length; i++) { ?>
-    <tr>
-      <td><?= rows[i].n ?></td>
+    <tr class="<?= i % 2 === 0 ? 'odd' : '' ?>">
+      <td><?= rows[i].name ?></td>
       <td><?= rows[i].description ?></td>
-      <? if (hasSac) { ?><td><?= rows[i].sac ?></td><? } ?>
-      <td class="r"><?= rows[i].quantity ?></td>
+      <td class="r"><?= rows[i].quantity ?><? if (rows[i].unit) { ?><span class="unit"><?= rows[i].unit ?></span><? } ?></td>
       <td class="r"><?= rows[i].rate ?></td>
       <td class="r"><?= rows[i].amount ?></td>
     </tr>
@@ -92,38 +94,43 @@
   </table>
 
   <table class="totals">
-    <tr><td class="spacer"></td><td>Subtotal</td><td class="r"><?= subtotal ?></td></tr>
+    <tr><th colspan="2">Total</th></tr>
+    <tr class="odd first"><td class="k">Subtotal</td><td class="v"><?= subtotal ?></td></tr>
     <? for (var t = 0; t < taxLines.length; t++) { ?>
-    <tr><td class="spacer"></td><td><?= taxLines[t].label ?></td><td class="r"><?= taxLines[t].amount ?></td></tr>
+    <tr><td class="k"><?= taxLines[t].label ?></td><td class="v"><?= taxLines[t].amount ?></td></tr>
     <? } ?>
-    <? if (roundOff) { ?><tr><td class="spacer"></td><td>Round off</td><td class="r"><?= roundOff ?></td></tr><? } ?>
-    <tr class="grand"><td class="spacer" style="border-top:none"></td><td>Total (<?= currency ?>)</td><td class="r"><?= total ?></td></tr>
+    <? if (roundOff) { ?><tr><td class="k">Round off</td><td class="v"><?= roundOff ?></td></tr><? } ?>
+    <tr class="strong"><td class="k">Total</td><td class="v"><?= total ?></td></tr>
+    <tr class="odd"><td class="k">Paid</td><td class="v"><?= paid ?></td></tr>
+    <tr class="strong last"><td class="k">Balance</td><td class="v"><?= balance ?></td></tr>
   </table>
-  <p class="words"><strong>Amount in words:</strong> <?= words ?></p>
 
   <? if (invoice.notes) { ?>
-  <p class="label">Notes</p>
-  <p class="small" style="white-space:pre-line; margin-bottom:12pt"><?= invoice.notes ?></p>
+  <div class="block">
+    <p class="label">Notes</p>
+    <p class="small" style="white-space:pre-line"><?= invoice.notes ?></p>
+  </div>
   <? } ?>
 
-  <table class="lower"><tr>
-    <td>
-      <? if (company.bank.length) { ?>
-      <p class="label">Pay to</p>
-      <? for (var b = 0; b < company.bank.length; b++) { ?><p class="small"><?= company.bank[b] ?></p><? } ?>
-      <? } ?>
-    </td>
-    <td>
-      <p class="small r">For <strong><?= company.legalName ?></strong></p>
-      <div class="sign-space"><? if (company.signatureImage) { ?><img src="<?!= company.signatureImage ?>" alt="Signature"><? } ?></div>
-      <div class="sign-rule">Authorised signatory</div>
-    </td>
-  </tr></table>
+  <? if (company.bank.length) { ?>
+  <div class="block">
+    <p class="label">Pay to</p>
+    <? for (var b = 0; b < company.bank.length; b++) { ?><p class="small"><?= company.bank[b] ?></p><? } ?>
+  </div>
+  <? } ?>
+
+  <? if (company.signatureImage) { ?>
+  <div class="block">
+    <p class="small r">For <strong><?= company.legalName ?></strong></p>
+    <div class="sign-space"><img src="<?!= company.signatureImage ?>" alt="Signature"></div>
+    <p class="small r">Authorised signatory</p>
+  </div>
+  <? } ?>
 
   <? if (company.terms.length) { ?>
-  <div class="terms">
+  <div class="block">
     <p class="label">Terms</p>
-    <? for (var k = 0; k < company.terms.length; k++) { ?><p><?= company.terms[k] ?></p><? } ?>
+    <? for (var k = 0; k < company.terms.length; k++) { ?><p class="small"><?= company.terms[k] ?></p><? } ?>
   </div>
   <? } ?>
 </body>

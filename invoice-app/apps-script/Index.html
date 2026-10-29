@@ -43,12 +43,17 @@
         </div>
         <div class="col-12">
           <label class="form-label" for="clientAddress">Billing address</label>
-          <textarea class="form-control" id="clientAddress" rows="2" autocomplete="off"></textarea>
+          <textarea class="form-control" id="clientAddress" rows="3" autocomplete="off" placeholder="One line per row, e.g. street, city and state, country"></textarea>
           <div class="invalid-feedback"></div>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="clientGstin">Client GSTIN <span class="text-muted">(optional)</span></label>
           <input type="text" class="form-control" id="clientGstin" maxlength="15" autocomplete="off" placeholder="22AAAAA0000A1Z5">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="clientPhone">Client phone <span class="text-muted">(optional)</span></label>
+          <input type="tel" class="form-control" id="clientPhone" autocomplete="off" placeholder="+1 (773) 844-6649">
           <div class="invalid-feedback"></div>
         </div>
         <div class="col-md-6">
@@ -87,6 +92,16 @@
           <input type="number" class="form-control" id="gstRate" min="0" max="40" step="0.01" value="<?= CONFIG.DEFAULT_GST_RATE ?>">
           <div class="invalid-feedback"></div>
         </div>
+        <div class="col-md-6">
+          <label class="form-label" for="paymentMethod">Payment method</label>
+          <input type="text" class="form-control" id="paymentMethod" maxlength="40" value="<?= CONFIG.DEFAULT_PAYMENT_METHOD ?>">
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="amountPaid">Amount already paid <span class="text-muted">(optional)</span></label>
+          <input type="number" class="form-control" id="amountPaid" min="0" step="0.01" placeholder="0.00">
+          <div class="invalid-feedback"></div>
+        </div>
         <div class="col-12">
           <label class="form-label" for="taxMode">GST type</label>
           <select class="form-select" id="taxMode">
@@ -116,7 +131,9 @@
             <tr id="rowSgst"><td id="lblSgst">SGST</td><td class="text-end" id="tSgst">0.00</td></tr>
             <tr id="rowIgst"><td id="lblIgst">IGST</td><td class="text-end" id="tIgst">0.00</td></tr>
             <tr id="rowRound"><td>Round off</td><td class="text-end" id="tRound">0.00</td></tr>
-            <tr class="fw-bold fs-5 border-top"><td>Total</td><td class="text-end" id="tTotal">0.00</td></tr>
+            <tr class="fw-bold border-top"><td>Total</td><td class="text-end" id="tTotal">0.00</td></tr>
+            <tr><td>Paid</td><td class="text-end" id="tPaid">0.00</td></tr>
+            <tr class="fw-bold fs-5 border-top"><td>Balance</td><td class="text-end" id="tBalance">0.00</td></tr>
           </table>
         </div>
       </div>
@@ -141,9 +158,9 @@
   <script>
     // Same rules and arithmetic as the server (Invoice.gs), inlined when this page is served.
     const Lib = (<?!= buildInvoiceLib_.toString() ?>)();
-    const DEFAULTS = <?!= jsonForScript_({ sac: CONFIG.DEFAULT_SAC, accessCode: !!CONFIG.ACCESS_CODE, gstRate: CONFIG.DEFAULT_GST_RATE, dueDays: CONFIG.DEFAULT_DUE_DAYS }) ?>;
-    const FIELDS = ['clientName', 'clientAddress', 'clientGstin', 'clientEmail', 'invoiceDate', 'dueDays', 'currency', 'taxMode', 'gstRate', 'notes'];
-    const ITEM_FIELDS = ['description', 'sac', 'quantity', 'unit', 'rate'];
+    const DEFAULTS = <?!= jsonForScript_({ accessCode: !!CONFIG.ACCESS_CODE, currency: CONFIG.DEFAULT_CURRENCY, taxMode: CONFIG.DEFAULT_TAX_MODE }) ?>;
+    const FIELDS = ['clientName', 'clientAddress', 'clientGstin', 'clientPhone', 'clientEmail', 'invoiceDate', 'dueDays', 'currency', 'taxMode', 'gstRate', 'paymentMethod', 'amountPaid', 'notes'];
+    const ITEM_FIELDS = ['name', 'description', 'quantity', 'unit', 'rate'];
 
     const $ = id => document.getElementById(id);
     let downloadUrl = null;
@@ -160,15 +177,14 @@
       card.className = 'item-card';
       card.innerHTML =
         '<div class="row g-2">' +
-        '<div class="col-12"><label class="form-label small mb-1">Description</label><input type="text" class="form-control" data-f="description" placeholder="e.g. Image annotation, bounding boxes"><div class="invalid-feedback"></div></div>' +
-        '<div class="col-6 col-md-3"><label class="form-label small mb-1">HSN/SAC</label><input type="text" class="form-control" data-f="sac" inputmode="numeric" maxlength="8"><div class="invalid-feedback"></div></div>' +
-        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Quantity</label><input type="number" class="form-control" data-f="quantity" min="0" step="any" value="1"><div class="invalid-feedback"></div></div>' +
-        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Unit</label><input type="text" class="form-control" data-f="unit" maxlength="20" placeholder="images, hours"><div class="invalid-feedback"></div></div>' +
-        '<div class="col-6 col-md-3"><label class="form-label small mb-1">Rate</label><input type="number" class="form-control" data-f="rate" min="0" step="any"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-md-5"><label class="form-label small mb-1">Item</label><input type="text" class="form-control" data-f="name" maxlength="60" placeholder="e.g. Video Review Hour"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-md-7"><label class="form-label small mb-1">Description <span class="text-muted">(optional)</span></label><input type="text" class="form-control" data-f="description" maxlength="200" placeholder="e.g. Qrambo tool video reviewing."><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-4"><label class="form-label small mb-1">Quantity</label><input type="number" class="form-control" data-f="quantity" min="0" step="any" value="1"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-4"><label class="form-label small mb-1">Unit</label><input type="text" class="form-control" data-f="unit" maxlength="20" placeholder="Hours, Units"><div class="invalid-feedback"></div></div>' +
+        '<div class="col-6 col-md-4"><label class="form-label small mb-1">Rate</label><input type="number" class="form-control" data-f="rate" min="0" step="any"><div class="invalid-feedback"></div></div>' +
         '</div>' +
         '<div class="d-flex justify-content-between align-items-center mt-2"><span class="small text-muted">Amount: <strong data-amount>0.00</strong></span>' +
         '<button type="button" class="btn btn-sm btn-link text-danger p-0" data-remove>Remove</button></div>';
-      card.querySelector('[data-f="sac"]').value = DEFAULTS.sac || '';
       card.querySelectorAll('input').forEach(input => {
         input.addEventListener('input', () => { input.classList.remove('is-invalid'); updateTotals(); });
       });
@@ -211,7 +227,10 @@
       $('tSgst').textContent = money(t.sgst);
       $('tIgst').textContent = money(t.igst);
       $('tRound').textContent = money(t.roundOff);
-      $('tTotal').textContent = Lib.CURRENCIES[currency].symbol + ' ' + money(t.total);
+      const paid = Lib.rules.amountPaid($('amountPaid').value).value || 0;
+      $('tTotal').textContent = money(t.total);
+      $('tPaid').textContent = money(paid);
+      $('tBalance').textContent = Lib.CURRENCIES[currency].symbol + ' ' + money(t.total - paid);
       $('rowCgst').classList.toggle('d-none', taxMode !== 'intra');
       $('rowSgst').classList.toggle('d-none', taxMode !== 'intra');
       $('rowIgst').classList.toggle('d-none', taxMode !== 'inter');
@@ -308,6 +327,8 @@
     function startNew() {
       $('invoiceForm').reset();
       $('invoiceDate').value = todayLocalIso();
+      $('currency').value = DEFAULTS.currency;
+      $('taxMode').value = DEFAULTS.taxMode;
       $('items').innerHTML = '';
       addItem();
       updateTotals();
@@ -321,7 +342,7 @@
       $(field).addEventListener('input', () => $(field).classList.remove('is-invalid'));
       $(field).addEventListener('blur', () => { if ($(field).value.trim()) checkField(field); });
     });
-    ['currency', 'taxMode', 'gstRate'].forEach(id => $(id).addEventListener('input', updateTotals));
+    ['currency', 'taxMode', 'gstRate', 'amountPaid'].forEach(id => $(id).addEventListener('input', updateTotals));
     $('btnAddItem').addEventListener('click', () => { addItem(); updateTotals(); });
     $('btnNew').addEventListener('click', startNew);
     $('invoiceForm').addEventListener('submit', generate);

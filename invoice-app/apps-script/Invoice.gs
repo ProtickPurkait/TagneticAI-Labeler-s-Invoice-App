@@ -49,17 +49,17 @@ function buildInvoiceLib_() {
     return toIso(d);
   }
 
-  // "2026-10-29" -> "29 Oct 2026"
-  function displayDate(iso) {
+  // Tokens: YYYY, MM, DD, D, MMM. "2026-09-01" with "MM/DD/YYYY" -> "09/01/2026"; default "1 Sep 2026".
+  function displayDate(iso, format) {
     var d = parseIsoDate(iso);
-    return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
-  }
-
-  // Indian financial year, April to March: "2026-10-29" -> "2026-27"
-  function financialYear(iso) {
-    var d = parseIsoDate(iso);
-    var start = d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
-    return start + '-' + ('0' + ((start + 1) % 100)).slice(-2);
+    var parts = {
+      YYYY: String(d.getUTCFullYear()),
+      MMM: MONTHS[d.getUTCMonth()],
+      MM: ('0' + (d.getUTCMonth() + 1)).slice(-2),
+      DD: ('0' + d.getUTCDate()).slice(-2),
+      D: String(d.getUTCDate()),
+    };
+    return (format || 'D MMM YYYY').replace(/YYYY|MMM|MM|DD|D/g, function (t) { return parts[t]; });
   }
 
   function formatGrouped(whole, indian) {
@@ -76,6 +76,14 @@ function buildInvoiceLib_() {
     var sign = minor < 0 ? '-' : '';
     var abs = Math.abs(minor);
     return sign + formatGrouped(Math.floor(abs / 100), cur.indian) + '.' + ('0' + (abs % 100)).slice(-2);
+  }
+
+  // 1100 -> "1,100.00"; up to 3 decimals are kept when present.
+  function formatQuantity(q, currency) {
+    var cur = CURRENCIES[currency] || CURRENCIES.INR;
+    var text = Math.abs(q).toFixed(Math.round(q * 100) === q * 100 ? 2 : 3);
+    var parts = text.split('.');
+    return (q < 0 ? '-' : '') + formatGrouped(parts[0], cur.indian) + '.' + parts[1];
   }
 
   var ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
@@ -143,14 +151,21 @@ function buildInvoiceLib_() {
       return { value: s };
     },
     clientAddress: function (v) {
-      var s = clean(v);
-      if (s.length < 10 || s.length > 300) return { error: 'Enter the client\'s address (10 to 300 characters).' };
+      var lines = String(v == null ? '' : v).split(/\r?\n/).map(clean).filter(Boolean);
+      var s = lines.join('\n');
+      if (s.length < 10 || s.length > 300 || lines.length > 6) return { error: 'Enter the client\'s address (10 to 300 characters, up to 6 lines).' };
       return { value: s };
     },
     clientGstin: function (v) {
       var s = String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase();
       if (!s) return { value: '' };
       if (!gstinValid(s)) return { error: 'That is not a valid GSTIN. Check all 15 characters, or leave it blank.' };
+      return { value: s };
+    },
+    clientPhone: function (v) {
+      var s = clean(v);
+      if (!s) return { value: '' };
+      if (s.length > 30 || !/^[0-9+()\-. ]{5,30}$/.test(s)) return { error: 'Enter a valid phone number, or leave it blank.' };
       return { value: s };
     },
     clientEmail: function (v) {
@@ -169,6 +184,18 @@ function buildInvoiceLib_() {
       var s = clean(v);
       if (!/^\d{1,3}$/.test(s) || Number(s) > 180) return { error: 'Enter the number of days to pay (0 to 180).' };
       return { value: Number(s) };
+    },
+    paymentMethod: function (v) {
+      var s = clean(v);
+      if (!s || s.length > 40) return { error: 'Enter how the client will pay (up to 40 characters).' };
+      return { value: s };
+    },
+    amountPaid: function (v) {
+      var s = clean(v);
+      if (!s) return { value: 0 };
+      var n = Number(s);
+      if (isNaN(n) || n < 0 || n > 1000000000000 || Math.round(n * 100) !== n * 100) return { error: 'Enter the amount already paid, with at most 2 decimals, or leave it blank.' };
+      return { value: toMinor(s) };
     },
     currency: function (v) {
       return CURRENCIES[v] ? { value: v } : { error: 'Choose a currency.' };
@@ -191,8 +218,10 @@ function buildInvoiceLib_() {
 
   function validateItem(item) {
     var errors = {};
+    var name = clean(item && item.name);
+    if (name.length < 2 || name.length > 60) errors.name = 'Name the item (2 to 60 characters).';
     var description = clean(item && item.description);
-    if (description.length < 2 || description.length > 200) errors.description = 'Describe the service (2 to 200 characters).';
+    if (description.length > 200) errors.description = 'Keep the description under 200 characters.';
     var quantityText = clean(item && item.quantity);
     var quantity = Number(quantityText);
     if (quantityText === '' || isNaN(quantity) || quantity <= 0 || quantity > 1000000 || Math.round(quantity * 1000) !== quantity * 1000) {
@@ -203,12 +232,10 @@ function buildInvoiceLib_() {
     if (rateText === '' || isNaN(rate) || rate < 0 || rate > 1000000000 || Math.round(rate * 100) !== rate * 100) {
       errors.rate = 'Rate must be 0 or more, with at most 2 decimals.';
     }
-    var sac = clean(item && item.sac).toUpperCase();
-    if (sac && !/^\d{4,8}$/.test(sac)) errors.sac = 'HSN/SAC is 4 to 8 digits.';
     var unit = clean(item && item.unit);
     if (unit.length > 20) errors.unit = 'Keep the unit short.';
     if (Object.keys(errors).length) return { errors: errors };
-    return { value: { description: description, quantity: quantity, rateMinor: toMinor(rateText), sac: sac, unit: unit } };
+    return { value: { name: name, description: description, quantity: quantity, rateMinor: toMinor(rateText), unit: unit } };
   }
 
   /**
@@ -249,6 +276,11 @@ function buildInvoiceLib_() {
       errors.taxMode = 'The company GSTIN is not set up, so GST cannot be charged.';
     }
 
+    if (!Object.keys(errors).length) {
+      var totals = computeTotals(items, value.taxMode, value.gstRate, value.currency);
+      if (value.amountPaid > totals.total) errors.amountPaid = 'The amount paid is more than the invoice total.';
+    }
+
     if (Object.keys(errors).length) return { ok: false, errors: errors, itemErrors: itemErrors };
     return { ok: true, value: value };
   }
@@ -263,7 +295,7 @@ function buildInvoiceLib_() {
     parseIsoDate: parseIsoDate,
     addDays: addDays,
     displayDate: displayDate,
-    financialYear: financialYear,
+    formatQuantity: formatQuantity,
     formatMoney: formatMoney,
     amountInWords: amountInWords,
     computeTotals: computeTotals,

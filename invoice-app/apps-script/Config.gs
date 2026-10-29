@@ -14,34 +14,41 @@ const CONFIG = {
   COMPANY_GSTIN: '',
   COMPANY_PAN: '',
   COMPANY_EMAIL: '',
+  COMPANY_PHONE: '',
 
-  // Printed under "Pay to" on every invoice. One line per entry; blank entries are skipped.
+  // Printed under "Pay to" at the foot of every invoice. One line per entry; entries with nothing
+  // after the colon are skipped, so with none filled in the block is left out.
   BANK_DETAILS: [
-    'Account name: TagneticAI LLP',
+    'Account name: ',
     'Bank: ',
     'Account number: ',
     'IFSC: ',
     'UPI: ',
   ],
 
-  // Printed at the bottom of every invoice.
-  TERMS: [
-    'Payment is due by the due date shown above.',
-    'Please quote the invoice number with your payment.',
-  ],
+  // Printed at the bottom of every invoice, one line each. Empty = no terms block.
+  TERMS: [],
 
   // Optional: Drive file ID of a PNG of the company stamp and authorised signature (transparent
   // background). When set, every invoice comes out signed. Keep that file private in Drive.
   COMPANY_SIGNATURE_FILE_ID: '',
 
-  // Invoice numbers look like TAI/2026-27/0001 and restart each financial year (April to March).
-  NUMBER_PREFIX: 'TAI',
+  // Invoices are numbered 1, 2, 3... with no gaps. FIRST_NUMBER is where the sequence starts, so it
+  // can carry on from invoices issued elsewhere (the last one was 9). NUMBER_PREFIX goes in front,
+  // e.g. 'TAI-' gives TAI-10. Changing either later does not renumber existing invoices.
+  FIRST_NUMBER: 10,
+  NUMBER_PREFIX: '',
 
-  // Default HSN/SAC code shown on the form for new line items (can be changed per item).
-  DEFAULT_SAC: '',
-  // Default GST rate on the form.
+  // How dates print on the invoice: YYYY, MM, DD, D (day without a zero) and MMM (Sep).
+  // 'MM/DD/YYYY' -> 09/01/2026, 'DD/MM/YYYY' -> 01/09/2026, 'D MMM YYYY' -> 1 Sep 2026.
+  DATE_FORMAT: 'MM/DD/YYYY',
+
+  // What the form starts with. Currency: 'INR' or 'USD'. GST type: 'none', 'intra' or 'inter'.
+  DEFAULT_CURRENCY: 'USD',
+  DEFAULT_TAX_MODE: 'none',
   DEFAULT_GST_RATE: 18,
-  DEFAULT_DUE_DAYS: 15,
+  DEFAULT_DUE_DAYS: 30,
+  DEFAULT_PAYMENT_METHOD: 'Wire Transfer',
 
   // Anyone with the portal link can open it, so set a code here to keep strangers from issuing
   // invoices in the company's name. Staff type it on the form. Blank = no code.

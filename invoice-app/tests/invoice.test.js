@@ -33,7 +33,9 @@ function form(overrides) {
     taxMode: 'inter',
     gstRate: '18',
     notes: '',
-    items: [{ description: 'Image annotation', quantity: '1000', rate: '2.50', unit: 'images', sac: '' }],
+    paymentMethod: 'Wire Transfer',
+    amountPaid: '',
+    items: [{ name: 'Image annotation', description: 'Bounding boxes', quantity: '1000', rate: '2.50', unit: 'Images' }],
   }, overrides);
 }
 
@@ -88,24 +90,27 @@ test('amounts in words use lakh/crore for INR and millions for USD', () => {
   assert.equal(l.formatMoney(123456789, 'USD'), '1,234,567.89');
 });
 
-test('financial year runs April to March', () => {
+test('dates and quantities print in the configured style', () => {
   const l = createApp().context.invoiceLib_();
-  assert.equal(l.financialYear('2026-03-31'), '2025-26');
-  assert.equal(l.financialYear('2026-04-01'), '2026-27');
-  assert.equal(l.addDays('2026-12-25', 15), '2027-01-09');
+  assert.equal(l.displayDate('2026-09-01', 'MM/DD/YYYY'), '09/01/2026');
+  assert.equal(l.displayDate('2026-09-01', 'DD/MM/YYYY'), '01/09/2026');
   assert.equal(l.displayDate('2026-10-29'), '29 Oct 2026');
+  assert.equal(l.addDays('2026-12-25', 15), '2027-01-09');
   assert.equal(l.parseIsoDate('2026-02-30'), null);
+  assert.equal(l.formatQuantity(5140, 'USD'), '5,140.00');
+  assert.equal(l.formatQuantity(12.5, 'INR'), '12.50');
+  assert.equal(l.formatQuantity(0.125, 'USD'), '0.125');
 });
 
 test('validation rejects bad input field by field', () => {
   const l = createApp().context.invoiceLib_();
   const bad = l.validateInvoice(form({
     clientName: 'A', clientGstin: '29BBBBB1111B1Z0', invoiceDate: '29/10/2026', dueDays: '400', currency: 'EUR', gstRate: '-1',
-    items: [{ description: 'x', quantity: '0', rate: '1.234', sac: 'ab' }],
+    items: [{ name: 'x', quantity: '0', rate: '1.234' }],
   }), WB_GSTIN);
   assert.equal(bad.ok, false);
   ['clientName', 'clientGstin', 'invoiceDate', 'dueDays', 'currency', 'gstRate', 'items'].forEach((f) => assert.ok(bad.errors[f], f));
-  assert.deepEqual(Object.keys(bad.itemErrors[0]).sort(), ['description', 'quantity', 'rate', 'sac']);
+  assert.deepEqual(Object.keys(bad.itemErrors[0]).sort(), ['name', 'quantity', 'rate']);
   assert.equal(l.validateInvoice(form({ items: [] }), WB_GSTIN).ok, false);
 });
 
@@ -120,32 +125,72 @@ test('GST type must match the client state, and needs a company GSTIN', () => {
 
 test('generateInvoice files a numbered PDF, logs it, and returns the download', () => {
   const app = readyApp();
-  const r = app.call('generateInvoice', form());
+  const r = app.call('generateInvoice', form({ amountPaid: '450' }));
   assert.equal(r.success, true, JSON.stringify(r));
-  assert.equal(r.number, 'TAI/2026-27/0001');
+  assert.equal(r.number, '10');
   assert.equal(r.total, '2,950.00'); // 2500 + 450 IGST
   const pdf = Buffer.from(r.pdfBase64, 'base64').toString('utf8');
   assert.ok(pdf.startsWith('%PDF'));
-  assert.match(pdf, /Tax Invoice/);
+  assert.match(pdf, /<h1>Invoice 10<\/h1>/);
   assert.match(pdf, /IGST @ 18%/);
-  assert.match(pdf, /Indian Rupees Two Thousand Nine Hundred Fifty Only/);
   assert.match(pdf, /Acme Robotics Pvt Ltd/);
+  assert.match(pdf, /Payment Method:/);
+  assert.match(pdf, /Rs\. 450\.00/); // paid
+  assert.match(pdf, /Rs\. 2,500\.00/); // balance
   assert.equal(pdfsIn(app).length, 1);
+  assert.match(pdfsIn(app)[0].name, /^Invoice 10 - Acme Robotics/);
 
   const row = rowFor(app, r.number);
   assert.equal(row.Client, 'Acme Robotics Pvt Ltd');
   assert.equal(row.Total, '2,950.00');
+  assert.equal(row.Paid, '450.00');
+  assert.equal(row.Balance, '2,500.00');
   assert.equal(row['Due Date'], '2026-11-13');
   assert.equal(row.Status, 'Issued');
 });
 
-test('numbers are sequential per financial year', () => {
+test('the layout matches the reference invoice: USD, item rows with units, paid and balance', () => {
+  const app = readyApp();
+  const r = app.call('generateInvoice', form({
+    currency: 'USD', taxMode: 'none', clientGstin: '', clientPhone: '+1 (773) 844-6649',
+    clientAddress: '399 Fremont Street\nSan Francisco CA 94105\nUnited States',
+    invoiceDate: '2026-09-01', dueDays: '30',
+    items: [
+      { name: 'Monthly Salary', description: 'For Managing and Recruiting Manpower 24/7.', quantity: '1', rate: '450', unit: 'Unit' },
+      { name: 'Video Review Hour', description: 'Qrambo tool video reviewing.', quantity: '5140', rate: '0.70', unit: 'Hours' },
+    ],
+  }));
+  assert.equal(r.success, true, JSON.stringify(r));
+  const pdf = Buffer.from(r.pdfBase64, 'base64').toString('utf8');
+  assert.match(pdf, /Invoice Date:<\/td><td class="v">09\/01\/2026/);
+  assert.match(pdf, /Due Date:<\/td><td class="v">10\/01\/2026/);
+  assert.match(pdf, /5,140\.00<span class="unit">Hours/);
+  assert.match(pdf, /\$3,598\.00/);
+  assert.match(pdf, /\$4,048\.00/); // subtotal = total = balance
+  assert.match(pdf, /<p>San Francisco CA 94105<\/p>/);
+  assert.match(pdf, /P: \+1 \(773\) 844-6649/);
+  assert.doesNotMatch(pdf, /GST @|IGST|CGST|Amount in words/);
+});
+
+test('numbers are sequential from FIRST_NUMBER, across dates', () => {
   const app = readyApp();
   const n = (date) => app.call('generateInvoice', form({ invoiceDate: date })).number;
-  assert.equal(n('2026-10-01'), 'TAI/2026-27/0001');
-  assert.equal(n('2026-10-02'), 'TAI/2026-27/0002');
-  assert.equal(n('2027-03-31'), 'TAI/2026-27/0003');
-  assert.equal(n('2027-04-01'), 'TAI/2027-28/0001');
+  assert.equal(n('2026-10-01'), '10');
+  assert.equal(n('2026-10-02'), '11');
+  assert.equal(n('2027-04-01'), '12');
+  app.eval("CONFIG.NUMBER_PREFIX = 'TAI-'");
+  assert.equal(n('2027-04-02'), 'TAI-13');
+});
+
+test('amount paid is checked against the total; a fully paid invoice is marked Paid', () => {
+  const app = readyApp();
+  const over = app.call('generateInvoice', form({ amountPaid: '2950.01' }));
+  assert.equal(over.success, false);
+  assert.ok(over.errors.amountPaid);
+  const r = app.call('generateInvoice', form({ amountPaid: '2950' }));
+  assert.equal(r.success, true);
+  assert.equal(rowFor(app, r.number).Status, 'Paid');
+  assert.equal(rowFor(app, r.number).Balance, '0.00');
 });
 
 test('invoices without company GSTIN are plain invoices', () => {
@@ -154,7 +199,6 @@ test('invoices without company GSTIN are plain invoices', () => {
   const r = app.call('generateInvoice', form({ taxMode: 'none', clientGstin: '' }));
   assert.equal(r.success, true, JSON.stringify(r));
   const pdf = Buffer.from(r.pdfBase64, 'base64').toString('utf8');
-  assert.doesNotMatch(pdf, /Tax Invoice/);
   assert.doesNotMatch(pdf, /GST @|IGST|CGST/);
 });
 
@@ -187,7 +231,7 @@ test('emails the client only when asked and an address is given', () => {
   assert.equal(r.emailed, true);
   assert.equal(app.mail.length, 1);
   assert.equal(app.mail[0].to, 'ap@acme.example');
-  assert.match(app.mail[0].subject, /TAI\/2026-27\/0002/);
+  assert.match(app.mail[0].subject, /Invoice 11 /);
 });
 
 test('invalid submissions are rejected before anything is filed', () => {
@@ -196,7 +240,7 @@ test('invalid submissions are rejected before anything is filed', () => {
   assert.equal(r.success, false);
   assert.ok(r.errors.clientName);
   assert.equal(pdfsIn(app).length, 0);
-  assert.equal(app.call('generateInvoice', form()).number, 'TAI/2026-27/0001'); // no number burned
+  assert.equal(app.call('generateInvoice', form()).number, '10'); // no number burned
 });
 
 test('the portal page renders with the shared rules inlined', () => {

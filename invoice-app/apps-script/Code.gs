@@ -13,9 +13,10 @@
 
 const REGISTER_COLUMNS = [
   'Issued At', 'Invoice No', 'Invoice Date', 'Due Date', 'Client', 'Client GSTIN', 'Client Address',
-  'Currency', 'Subtotal', 'GST', 'Total', 'Invoice PDF', 'Status',
+  'Currency', 'Subtotal', 'GST', 'Total', 'Paid', 'Balance', 'Invoice PDF', 'Status',
 ];
 const STATUS_ISSUED = 'Issued';
+const STATUS_PAID = 'Paid';
 
 function doGet() {
   return HtmlService.createTemplateFromFile('Index')
@@ -50,17 +51,19 @@ function previewInvoice() {
     clientAddress: '12 Example Road, Salt Lake, Kolkata, West Bengal 700091',
     invoiceDate: todayIso_(new Date()),
     dueDays: CONFIG.DEFAULT_DUE_DAYS,
-    currency: 'INR',
-    taxMode: taxed ? 'intra' : 'none',
+    currency: CONFIG.DEFAULT_CURRENCY,
+    taxMode: taxed ? CONFIG.DEFAULT_TAX_MODE : 'none',
     gstRate: CONFIG.DEFAULT_GST_RATE,
+    paymentMethod: CONFIG.DEFAULT_PAYMENT_METHOD,
+    amountPaid: '100',
     notes: 'Sample invoice for checking the layout.',
     items: [
-      { description: 'Image annotation (bounding boxes)', quantity: '1500', rate: '2.50', unit: 'images', sac: CONFIG.DEFAULT_SAC },
-      { description: 'Quality review', quantity: '12.5', rate: '400', unit: 'hours', sac: CONFIG.DEFAULT_SAC },
+      { name: 'Image Labeling', description: 'Bounding boxes on street scenes.', quantity: '1500', rate: '0.85', unit: 'Images' },
+      { name: 'Quality Review', description: 'Second-pass review.', quantity: '12.5', rate: '4', unit: 'Hours' },
     ],
   }, CONFIG.COMPANY_GSTIN);
   if (!check.ok) throw new Error('Preview data was rejected: ' + JSON.stringify(check.errors));
-  const pdf = renderInvoicePdf_(check.value, CONFIG.NUMBER_PREFIX + '/PREVIEW');
+  const pdf = renderInvoicePdf_(check.value, CONFIG.NUMBER_PREFIX + 'PREVIEW');
   const file = folder_('ROOT_FOLDER_ID').createFile(pdf.setName('PREVIEW - ' + pdf.getName()));
   console.log('Preview PDF: ' + file.getUrl());
 }
@@ -79,7 +82,7 @@ function generateInvoice(input) {
 
   const invoice = check.value;
   const now = new Date();
-  const number = nextInvoiceNumber_(invoice.invoiceDate);
+  const number = nextInvoiceNumber_();
   const pdf = renderInvoicePdf_(invoice, number);
   const file = folder_('ROOT_FOLDER_ID').createFile(pdf);
   const totals = lib.computeTotals(invoice.items, invoice.taxMode, invoice.gstRate, invoice.currency);
@@ -96,8 +99,10 @@ function generateInvoice(input) {
     'Subtotal': lib.formatMoney(totals.subtotal, invoice.currency),
     'GST': lib.formatMoney(totals.tax, invoice.currency),
     'Total': lib.formatMoney(totals.total, invoice.currency),
+    'Paid': lib.formatMoney(invoice.amountPaid, invoice.currency),
+    'Balance': lib.formatMoney(totals.total - invoice.amountPaid, invoice.currency),
     'Invoice PDF': file.getUrl(),
-    'Status': STATUS_ISSUED,
+    'Status': invoice.amountPaid > 0 && invoice.amountPaid === totals.total ? STATUS_PAID : STATUS_ISSUED,
   });
 
   let emailed = false;
@@ -111,8 +116,9 @@ function generateInvoice(input) {
         body: [
           'Dear ' + invoice.clientName + ',',
           '',
-          'Please find attached invoice ' + number + ' for ' + lib.CURRENCIES[invoice.currency].symbol + ' ' +
-            lib.formatMoney(totals.total, invoice.currency) + ', due on ' + lib.displayDate(lib.addDays(invoice.invoiceDate, invoice.dueDays)) + '.',
+          'Please find attached invoice ' + number + ' for ' + symbol_(invoice.currency) +
+            lib.formatMoney(totals.total - invoice.amountPaid, invoice.currency) + ', due on ' +
+            lib.displayDate(lib.addDays(invoice.invoiceDate, invoice.dueDays), CONFIG.DATE_FORMAT) + '.',
           '',
           'Thank you,',
           CONFIG.COMPANY_LEGAL_NAME,
@@ -142,51 +148,57 @@ function renderInvoicePdf_(invoice, number) {
   const lib = invoiceLib_();
   const cur = invoice.currency;
   const totals = lib.computeTotals(invoice.items, invoice.taxMode, invoice.gstRate, cur);
-  const money = function (minor) { return lib.formatMoney(minor, cur); };
-  const taxed = invoice.taxMode !== 'none';
+  const money = function (minor) { return symbol_(cur) + lib.formatMoney(minor, cur); };
   const half = invoice.gstRate / 2;
+  const dueIso = lib.addDays(invoice.invoiceDate, invoice.dueDays);
+  const balance = totals.total - invoice.amountPaid;
 
   const template = HtmlService.createTemplateFromFile('InvoiceTemplate');
   template.company = {
     legalName: CONFIG.COMPANY_LEGAL_NAME,
-    address: CONFIG.COMPANY_ADDRESS,
+    addressLines: CONFIG.COMPANY_ADDRESS.split(/\s*,\s*/).filter(Boolean),
     gstin: CONFIG.COMPANY_GSTIN,
     pan: CONFIG.COMPANY_PAN,
     email: CONFIG.COMPANY_EMAIL,
+    phone: CONFIG.COMPANY_PHONE,
     bank: CONFIG.BANK_DETAILS.filter(function (line) { return line.trim() && !/:$/.test(line.trim()); }),
     terms: CONFIG.TERMS,
     signatureImage: imageDataUri_(companySignatureImage_()),
   };
   template.invoice = invoice;
+  template.clientLines = invoice.clientAddress.split('\n');
   template.number = number;
-  template.symbol = lib.CURRENCIES[cur].symbol === '₹' ? 'Rs.' : lib.CURRENCIES[cur].symbol;
-  template.currency = cur;
-  template.dateText = lib.displayDate(invoice.invoiceDate);
-  template.dueText = lib.displayDate(lib.addDays(invoice.invoiceDate, invoice.dueDays));
-  template.rows = invoice.items.map(function (item, i) {
+  template.dateText = lib.displayDate(invoice.invoiceDate, CONFIG.DATE_FORMAT);
+  template.dueText = lib.displayDate(dueIso, CONFIG.DATE_FORMAT);
+  template.rows = invoice.items.map(function (item) {
     return {
-      n: i + 1,
+      name: item.name,
       description: item.description,
-      sac: item.sac,
-      quantity: String(item.quantity) + (item.unit ? ' ' + item.unit : ''),
+      quantity: lib.formatQuantity(item.quantity, cur),
+      unit: item.unit,
       rate: money(item.rateMinor),
       amount: money(lib.lineAmount(item.quantity, item.rateMinor)),
     };
   });
-  template.hasSac = invoice.items.some(function (item) { return item.sac; });
-  template.taxed = taxed;
   template.taxLines = invoice.taxMode === 'intra'
     ? [{ label: 'CGST @ ' + half + '%', amount: money(totals.cgst) }, { label: 'SGST @ ' + half + '%', amount: money(totals.sgst) }]
     : invoice.taxMode === 'inter' ? [{ label: 'IGST @ ' + invoice.gstRate + '%', amount: money(totals.igst) }] : [];
+  template.taxed = invoice.taxMode !== 'none';
   template.subtotal = money(totals.subtotal);
   template.roundOff = totals.roundOff ? money(totals.roundOff) : '';
   template.total = money(totals.total);
-  template.words = lib.amountInWords(totals.total, cur);
+  template.paid = money(invoice.amountPaid);
+  template.balance = money(balance);
   template.assets = { logoBadge: imageDataUri_(ASSETS.logoBadge) };
 
   const html = template.evaluate().getContent();
-  const fileName = number.replace(/\//g, '-') + ' - ' + invoice.clientName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
+  const fileName = 'Invoice ' + number + ' - ' + invoice.clientName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
   return Utilities.newBlob(html, MimeType.HTML, 'invoice.html').getAs(MimeType.PDF).setName(fileName);
+}
+
+// The PDF converter's fonts may lack the rupee sign, so rupee amounts are prefixed "Rs. ".
+function symbol_(currency) {
+  return currency === 'USD' ? '$' : 'Rs. ';
 }
 
 // The optional company stamp and signature, as a data URI for the template.
@@ -208,18 +220,16 @@ function imageDataUri_(value) {
   return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]+={0,2}$/.test(value || '') ? value : '';
 }
 
-// Sequential per financial year: TAI/2026-27/0001. The counter is kept in script properties and
-// advanced under a lock, so two people issuing at once never get the same number.
-function nextInvoiceNumber_(invoiceDateIso) {
-  const fy = invoiceLib_().financialYear(invoiceDateIso);
-  const key = 'COUNTER_' + fy;
+// Sequential with no gaps: FIRST_NUMBER, FIRST_NUMBER + 1, ... The counter is kept in script
+// properties and advanced under a lock, so two people issuing at once never get the same number.
+function nextInvoiceNumber_() {
   const props = PropertiesService.getScriptProperties();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const next = Number(props.getProperty(key) || 0) + 1;
-    props.setProperty(key, String(next));
-    return CONFIG.NUMBER_PREFIX + '/' + fy + '/' + ('000' + next).slice(-Math.max(4, String(next).length));
+    const next = Math.max(Number(props.getProperty('LAST_NUMBER') || 0) + 1, CONFIG.FIRST_NUMBER);
+    props.setProperty('LAST_NUMBER', String(next));
+    return CONFIG.NUMBER_PREFIX + next;
   } finally {
     lock.releaseLock();
   }
