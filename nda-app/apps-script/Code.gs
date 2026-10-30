@@ -182,25 +182,7 @@ function uploadSignedNda(input) {
   sheet.getRange(row, column_(headers, 'Status')).setValue(STATUS_RECEIVED);
   sheet.getRange(row, column_(headers, 'Signed At')).setValue(formatTimestamp_(now));
 
-  if (CONFIG.HR_EMAIL) {
-    const name = sheet.getRange(row, column_(headers, 'Full Name')).getValue();
-    try {
-      MailApp.sendEmail(
-        CONFIG.HR_EMAIL,
-        'Signed NDA received: ' + name + ' (' + ref + ')',
-        [
-          name + ' (mobile +91 ' + registeredMobile + ') uploaded ' + urls.length + ' file(s) for NDA ' + ref + '.',
-          '',
-          'Signed copies:',
-          urls.join('\n'),
-          '',
-          'Register: ' + sheet.getParent().getUrl(),
-        ].join('\n')
-      );
-    } catch (err) {
-      console.error('Could not notify HR about ' + ref + ': ' + err);
-    }
-  }
+  if (CONFIG.HR_EMAIL) notifyHr_(sheet, headers, row, ref, blobs, totalBytes, urls, now);
 
   return { success: true, ref: ref, count: urls.length };
 }
@@ -224,6 +206,44 @@ function renderNdaPdf_(employee, aadhaarShown, ref, date) {
   const html = template.evaluate().getContent();
   const fileName = ref + ' - NDA - ' + employee.fullName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
   return Utilities.newBlob(html, MimeType.HTML, 'nda.html').getAs(MimeType.PDF).setName(fileName);
+}
+
+// Tells HR a signed copy has arrived, written as the employee's reply to their NDA email: the
+// employee's name as the sender name, Reply-To their email, and the signed pages attached.
+// (Apps Script can only send from the owner's address, never from the employee's own mailbox.)
+function notifyHr_(sheet, headers, row, ref, blobs, totalBytes, urls, uploadedAt) {
+  const field = function (name) { return String(sheet.getRange(row, column_(headers, name)).getValue() || '').trim(); };
+  const name = field('Full Name');
+  const email = field('Email');
+  // Gmail refuses messages over 25 MB; above that, HR gets the Drive links only.
+  const attach = totalBytes <= 20 * 1024 * 1024;
+  const options = { name: name + ' (via NDA portal)' };
+  if (email) options.replyTo = email;
+  if (attach) options.attachments = blobs;
+  try {
+    MailApp.sendEmail(
+      CONFIG.HR_EMAIL,
+      'Re: Your ' + CONFIG.COMPANY_NAME + ' NDA (' + ref + ')',
+      [
+        'Signed NDA uploaded on the NDA portal' + (attach ? ' (signed pages attached).' : '.'),
+        '',
+        name,
+        'Mobile No: +91 ' + field('Mobile'),
+        'Email Id: ' + (email || 'not given'),
+        'NDA reference: ' + ref,
+        'Uploaded: ' + formatTimestamp_(uploadedAt),
+        '',
+        email ? 'Reply to this email to write to ' + name + '.' : 'No email address was given, so replies come back to you.',
+        '',
+        'Saved in Drive:',
+        urls.join('\n'),
+        'NDA register: ' + sheet.getParent().getUrl(),
+      ].join('\n'),
+      options
+    );
+  } catch (err) {
+    console.error('Could not notify HR about ' + ref + ': ' + err);
+  }
 }
 
 // The optional pre-applied company stamp and signature, as a data URI for the template.

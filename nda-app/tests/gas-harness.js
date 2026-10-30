@@ -218,7 +218,7 @@ function createApp() {
       }),
     },
     MailApp: {
-      sendEmail(...args) { mail.push(args.length === 1 ? args[0] : { to: args[0], subject: args[1], body: args[2] }); },
+      sendEmail(...args) { mail.push(args.length === 1 ? args[0] : Object.assign({ to: args[0], subject: args[1], body: args[2] }, args[3])); },
     },
     Utilities: {
       newBlob: (data, type, name) => new Blob(data, type, name),

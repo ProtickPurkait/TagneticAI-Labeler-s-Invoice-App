@@ -232,15 +232,48 @@ test('uploadSignedNda stores the pages, updates the register, and keeps re-uploa
   assert.equal(app.mail.length, 0, 'no HR email unless HR_EMAIL is set');
 });
 
-test('HR is emailed about signed copies when HR_EMAIL is set', () => {
+test('HR gets the signed copy as the employee\'s reply: their name, Reply-To them, pages attached', () => {
+  const app = readyApp();
+  app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'");
+  const { ref } = app.call('generateNda', employee({ email: 'Rahul@Example.com' }));
+  app.mail.length = 0; // ignore the employee's own copy
+  app.call('uploadSignedNda', {
+    ref, mobile: '9876543210',
+    files: [fileArg(JPEG_BYTES, 'image/jpeg', 'p1.jpg'), fileArg(PDF_BYTES, 'application/pdf', 'p2.pdf')],
+  });
+
+  assert.equal(app.mail.length, 1);
+  const mail = app.mail[0];
+  assert.equal(mail.to, 'hr@tagneticai.com');
+  assert.equal(mail.subject, 'Re: Your TagneticAI NDA (' + ref + ')');
+  assert.equal(mail.name, 'Rahul Kumar Das (via NDA portal)');
+  assert.equal(mail.replyTo, 'rahul@example.com');
+  assert.deepEqual(Array.from(mail.attachments, (b) => b.getContentType()), ['image/jpeg', 'application/pdf']);
+  assert.match(mail.body, /Mobile No: \+91 9876543210/);
+  assert.match(mail.body, /Email Id: rahul@example\.com/);
+  assert.match(mail.body, /Reply to this email to write to Rahul Kumar Das/);
+});
+
+test('without an employee email, HR still gets the pages, and replies come back to HR', () => {
   const app = readyApp();
   app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'");
   const { ref } = app.call('generateNda', employee());
   app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] });
-  assert.equal(app.mail.length, 1);
-  assert.equal(app.mail[0].to, 'hr@tagneticai.com');
-  assert.match(app.mail[0].subject, /Signed NDA received: Rahul Kumar Das/);
-  assert.match(app.mail[0].body, /mobile \+91 9876543210/);
+  const mail = app.mail[0];
+  assert.equal(mail.replyTo, undefined);
+  assert.equal(mail.attachments.length, 1);
+  assert.match(mail.body, /Email Id: not given/);
+});
+
+test('very large uploads are linked rather than attached, so the HR email still sends', () => {
+  const app = readyApp();
+  app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'; CONFIG.MAX_UPLOAD_MB = 40");
+  const { ref } = app.call('generateNda', employee());
+  const big = Buffer.concat([PDF_BYTES, Buffer.alloc(21 * 1024 * 1024)]);
+  assert.equal(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(big, 'application/pdf')] }).success, true);
+  const mail = app.mail[0];
+  assert.equal(mail.attachments, undefined);
+  assert.match(mail.body, /Saved in Drive:\nhttps:\/\/drive\.google\.com/);
 });
 
 test('the NDA date uses the "June 17th, 2026" style', () => {

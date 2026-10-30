@@ -146,6 +146,11 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
 - **If an employee made a typo,** they correct the form and generate again. Each attempt gets its own
   reference number; the newest one is the one they upload against.
 - **Re-uploads,** for example a missed page, are kept alongside the earlier files.
+- **Signed-copy emails:** with `HR_EMAIL` set, each upload emails HR *"Re: Your TagneticAI NDA (ref)"* with the
+  employee's name as the sender name and the signed pages attached (only Drive links above 20 MB). Reply
+  goes to the employee's email, if they gave one. It is sent from the account that runs the script, because
+  Gmail doesn't let a script send as someone else. If `HR_EMAIL` is that same account, Gmail's inbox list
+  shows these as "me"; a separate HR mailbox shows the employee's name there too.
 - **Company signature:** see below.
 
 ### Company signature
