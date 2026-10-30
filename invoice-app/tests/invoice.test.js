@@ -260,3 +260,15 @@ test('previewInvoice saves a sample PDF', () => {
   assert.equal(pdfsIn(app).length, 1);
   assert.match(pdfsIn(app)[0].name, /^PREVIEW/);
 });
+
+test('a register from an earlier version gets the missing columns added', () => {
+  const app = readyApp();
+  const rows = app.sheetRows();
+  rows[0] = rows[0].filter((h) => h !== 'Paid' && h !== 'Balance'); // as the first release made it
+  const r = app.call('generateInvoice', form({ amountPaid: '100' }));
+  assert.equal(r.success, true, JSON.stringify(r));
+  const row = rowFor(app, r.number);
+  assert.equal(row.Paid, '100.00');
+  assert.equal(row.Balance, '2,850.00');
+  assert.equal(row.Client, 'Acme Robotics Pvt Ltd');
+});

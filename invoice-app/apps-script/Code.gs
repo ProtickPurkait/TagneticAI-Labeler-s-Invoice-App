@@ -257,7 +257,13 @@ function column_(headers, name) {
 function appendRegisterRow_(record) {
   const sheet = registerSheet_();
   const headers = registerHeaders_(sheet);
-  REGISTER_COLUMNS.forEach(function (name) { column_(headers, name); }); // every heading must be present
+  // A register made by an earlier version may lack newer columns: add them at the end.
+  REGISTER_COLUMNS.forEach(function (name) {
+    if (headers.indexOf(name) < 0) {
+      sheet.getRange(1, headers.length + 1).setValue(name).setFontWeight('bold');
+      headers.push(name);
+    }
+  });
   const values = headers.map(function (name) {
     const value = record[name] == null ? '' : String(record[name]);
     // Stop text such as "=IMPORTXML(...)" in a client name or address from running as a formula.
