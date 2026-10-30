@@ -47,10 +47,12 @@ Employee                         Apps Script (runs as you)                Your G
    (checked as they type)        • re-checks every field                  ├─ Generated NDAs/  (PDF per employee)
                                  • fills NdaTemplate.html → PDF           ├─ Signed NDAs/     (uploaded scans)
                           ◄──    • logs a row in the register             └─ TagneticAI NDA Register (Sheet)
-2. Downloads PDF (+ optional email copy)
+2. Downloads PDF (also emailed to them)
    Prints, signs, initials every page
-3. Uploads scan/photos   ──►  uploadSignedNda()                    ──►  Signed NDAs/ + register row → "Signed copy received"
-   with reference no. + mobile   • ref + mobile must match a register row (optional email to HR)
+3. Replies to the NDA    ──►  collectEmailedNdas() every 15 min     ──►  Signed NDAs/ + register row → "Signed copy received"
+   email with the scans       • only replies from their own address   (Gmail conversation labelled "NDA filed")
+   or uploads them       ──►  uploadSignedNda()                    ──►  same, plus an email to HR
+   with reference no. + mobile   • ref + mobile must match a register row
 ```
 
 ### What is checked
@@ -62,7 +64,7 @@ Employee                         Apps Script (runs as you)                Your G
 | Aadhaar | 12 digits, cannot start with 0 or 1, and must pass the **Verhoeff checksum** that UIDAI uses, so almost every single-digit typo or swapped pair is caught. |
 | PAN | `AAAAA9999A` format, upper-cased, 4th letter must be `P` (individual). |
 | Mobile | 10 digits starting 6–9. `+91`, `91`, `0`, spaces and dashes are stripped. |
-| Email | Optional. If given, the NDA is emailed to the employee as well. |
+| Email | Required. The NDA is emailed there, and the employee returns it by replying from that address. |
 
 The same rules run in the browser, for instant feedback, and on the server, so they can't be bypassed.
 They are written once, in `Validation.gs`, and `Index.html` inlines that function's source when the
@@ -104,7 +106,10 @@ is best: the files stay in company Drive, and it can send 1,500 emails a day ins
 2. Google asks for permission. Click **Review permissions**, choose the account, then **Advanced → Go to
    TagneticAI NDA Portal (unsafe)** → **Allow**. The "unsafe" warning appears for any script you write
    yourself that Google hasn't reviewed.
+   It asks for Drive and Sheets (files and register), sending email, reading your Gmail (to pick up
+   employees' replies with the signed NDA), and running on a schedule (to check for those every 15 minutes).
 3. The **Execution log** prints links to the new *TagneticAI NDAs* folder and *NDA Register* sheet.
+   Re-run `setup` after updating to a version that adds permissions; it is safe to run again.
 
 ### 3. Check the document
 Pick **`previewNda`** → **Run**, then open the PDF link from the log. Adjust `NdaTemplate.html` or
@@ -146,7 +151,13 @@ Version: New version → Deploy**. The URL stays the same, so Netlify needs no c
 - **If an employee made a typo,** they correct the form and generate again. Each attempt gets its own
   reference number; the newest one is the one they upload against.
 - **Re-uploads,** for example a missed page, are kept alongside the earlier files.
-- **Signed-copy emails:** with `HR_EMAIL` set, each upload emails HR *"Re: Your TagneticAI NDA (ref)"* with the
+- **Signed copies by email:** the NDA email asks employees to reply with the signed pages attached, so
+  the reply comes from their own address, like any email. Every 15 minutes the script files replies to
+  *"Your TagneticAI NDA (ref)"* that come from the address the employee registered with: the PDF/JPG/PNG
+  attachments go to *Signed NDAs*, the register shows *Signed copy received*, and the conversation gets the
+  Gmail label **NDA filed**. Replies land in the mailbox of the account that runs the script. When testing,
+  reply from a different address than that account, because your own messages are skipped.
+- **Portal uploads:** with `HR_EMAIL` set, each upload emails HR *"Re: Your TagneticAI NDA (ref)"* with the
   employee's name as the sender name and the signed pages attached (only Drive links above 20 MB). Reply
   goes to the employee's email, if they gave one. It is sent from the account that runs the script, because
   Gmail doesn't let a script send as someone else. If `HR_EMAIL` is that same account, Gmail's inbox list

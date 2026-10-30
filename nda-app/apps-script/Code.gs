@@ -17,6 +17,8 @@ const REGISTER_COLUMNS = [
 ];
 const STATUS_AWAITING = 'Awaiting signed copy';
 const STATUS_RECEIVED = 'Signed copy received';
+// Gmail label put on conversations whose emailed signed copy has been filed.
+const FILED_LABEL = 'NDA filed';
 
 // Accepted signed-copy formats, checked against the file's first bytes, not just its declared type.
 const UPLOAD_TYPES = {
@@ -35,16 +37,31 @@ function doGet() {
 }
 
 /**
- * Run once from the editor (select "setup" and press Run). Creates the Drive folders and
- * the register spreadsheet, and remembers their IDs. Safe to run again.
+ * Run once from the editor (select "setup" and press Run). Creates the Drive folders, the
+ * register spreadsheet and the 15-minute check for emailed signed copies. Safe to run again;
+ * running it also checks for emailed signed copies straight away.
  */
 function setup() {
   const root = ensureFolder_('ROOT_FOLDER_ID', CONFIG.COMPANY_NAME + ' NDAs', null);
   ensureFolder_('GENERATED_FOLDER_ID', 'Generated NDAs', root);
   ensureFolder_('SIGNED_FOLDER_ID', 'Signed NDAs', root);
   const register = ensureRegister_(root);
+  ensureEmailCheck_();
+  collectEmailedNdas_();
   console.log('NDA folder: ' + root.getUrl());
   console.log('NDA register: ' + register.getUrl());
+  console.log('Signed NDAs emailed back are filed every 15 minutes.');
+}
+
+/**
+ * Runs every 15 minutes (scheduled by setup). Files signed NDAs that employees send back by
+ * replying to their NDA email. Calls from the web page are ignored: only the schedule's own
+ * event carries a valid trigger ID.
+ */
+function collectEmailedNdas(e) {
+  const uid = e && e.triggerUid;
+  if (!uid || !ScriptApp.getProjectTriggers().some(function (t) { return t.getUniqueId() === uid; })) return;
+  collectEmailedNdas_();
 }
 
 /** Run from the editor to check the NDA layout. Saves a sample PDF and logs its link. */
@@ -109,7 +126,8 @@ function generateNda(input) {
           '1. Print all pages and read the agreement fully.',
           '2. Sign under "Receiving Party" on the last page and initial the bottom of every page, in blue or black ink.',
           '3. Scan or photograph every page clearly.',
-          '4. Upload the signed pages on the NDA portal using your reference number and mobile number.',
+          '4. Reply to this email with the signed pages attached (PDF, JPG or PNG).',
+          '   You can also upload them on the NDA portal using your reference number and mobile number.',
           '',
           CONFIG.COMPANY_NAME,
         ].join('\n'),
@@ -175,12 +193,7 @@ function uploadSignedNda(input) {
   const folder = folder_('SIGNED_FOLDER_ID');
   const urls = blobs.map(function (blob) { return folder.createFile(blob).getUrl(); });
 
-  // Re-uploads (e.g. a missed page) are kept alongside earlier ones.
-  const signedCell = sheet.getRange(row, column_(headers, 'Signed Copy'));
-  const earlier = String(signedCell.getValue() || '');
-  signedCell.setValue((earlier ? earlier + '\n' : '') + urls.join('\n'));
-  sheet.getRange(row, column_(headers, 'Status')).setValue(STATUS_RECEIVED);
-  sheet.getRange(row, column_(headers, 'Signed At')).setValue(formatTimestamp_(now));
+  recordSignedCopy_(sheet, headers, row, urls, now);
 
   if (CONFIG.HR_EMAIL) notifyHr_(sheet, headers, row, ref, blobs, totalBytes, urls, now);
 
@@ -206,6 +219,78 @@ function renderNdaPdf_(employee, aadhaarShown, ref, date) {
   const html = template.evaluate().getContent();
   const fileName = ref + ' - NDA - ' + employee.fullName.replace(/[^A-Za-z0-9 .-]/g, '') + '.pdf';
   return Utilities.newBlob(html, MimeType.HTML, 'nda.html').getAs(MimeType.PDF).setName(fileName);
+}
+
+// Re-uploads (e.g. a missed page) are kept alongside earlier ones.
+function recordSignedCopy_(sheet, headers, row, urls, when) {
+  const signedCell = sheet.getRange(row, column_(headers, 'Signed Copy'));
+  const earlier = String(signedCell.getValue() || '');
+  signedCell.setValue((earlier ? earlier + '\n' : '') + urls.join('\n'));
+  sheet.getRange(row, column_(headers, 'Status')).setValue(STATUS_RECEIVED);
+  sheet.getRange(row, column_(headers, 'Signed At')).setValue(formatTimestamp_(when));
+}
+
+function ensureEmailCheck_() {
+  const exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'collectEmailedNdas'; });
+  if (!exists) ScriptApp.newTrigger('collectEmailedNdas').timeBased().everyMinutes(15).create();
+}
+
+// Finds employees' email replies with attachments, saves the signed pages in Drive and marks
+// the register. Each email is filed once: its Gmail message ID is part of the saved file names.
+function collectEmailedNdas_() {
+  const props = PropertiesService.getScriptProperties();
+  const startedAt = Math.floor(Date.now() / 1000);
+  // Search from the last check (the first time, the last two weeks), with an hour of overlap.
+  const since = Number(props.getProperty('MAIL_CHECKED_UNTIL')) || startedAt - 14 * 24 * 3600;
+  const threads = GmailApp.search('subject:"' + CONFIG.REF_PREFIX + '" has:attachment -from:me after:' + (since - 3600), 0, 100);
+  if (threads.length) {
+    const sheet = registerSheet_();
+    const headers = registerHeaders_(sheet);
+    const folder = folder_('SIGNED_FOLDER_ID');
+    threads.forEach(function (thread) { fileEmailedThread_(thread, sheet, headers, folder); });
+  }
+  props.setProperty('MAIL_CHECKED_UNTIL', String(startedAt));
+}
+
+function fileEmailedThread_(thread, sheet, headers, folder) {
+  const match = thread.getFirstMessageSubject().match(new RegExp(CONFIG.REF_PREFIX + '-\\d{6}-[A-Z0-9]{5}'));
+  const ref = match ? match[0] : '';
+  const row = ref ? findRegisterRow_(sheet, headers, ref) : 0;
+  if (!row) return;
+  // Only replies from the address the employee gave for this NDA are filed.
+  const employeeEmail = mailboxOf_(sheet.getRange(row, column_(headers, 'Email')).getValue());
+  if (!employeeEmail) return;
+
+  let filed = false;
+  thread.getMessages().forEach(function (message) {
+    if (mailboxOf_(message.getFrom()) !== employeeEmail) return;
+    if (folder.searchFiles('title contains "' + message.getId() + '"').hasNext()) return; // filed earlier
+    const urls = [];
+    message.getAttachments({ includeInlineImages: false }).forEach(function (attachment) {
+      const bytes = attachment.getBytes();
+      const mimeType = Object.keys(UPLOAD_TYPES).filter(function (t) { return startsWith_(bytes, UPLOAD_TYPES[t].magic); })[0];
+      if (!mimeType) return; // not a PDF, JPG or PNG
+      const name = ref + '_emailed_' + message.getId() + '_' + (urls.length + 1) + '.' + UPLOAD_TYPES[mimeType].ext;
+      urls.push(folder.createFile(Utilities.newBlob(bytes, mimeType, name)).getUrl());
+    });
+    if (!urls.length) return;
+    recordSignedCopy_(sheet, headers, row, urls, message.getDate());
+    filed = true;
+  });
+  if (filed) thread.addLabel(GmailApp.getUserLabelByName(FILED_LABEL) || GmailApp.createLabel(FILED_LABEL));
+}
+
+// "Ranita Das <Ranita.Das@Gmail.com>" -> "ranitadas@gmail.com". Gmail ignores dots and "+tags",
+// so those are removed for gmail.com addresses before comparing.
+function mailboxOf_(value) {
+  const found = String(value || '').match(/<([^>]+)>/);
+  const address = (found ? found[1] : String(value || '')).trim().toLowerCase();
+  const parts = address.split('@');
+  if (parts.length !== 2) return '';
+  if (parts[1] === 'gmail.com' || parts[1] === 'googlemail.com') {
+    return parts[0].split('+')[0].replace(/\./g, '') + '@gmail.com';
+  }
+  return address;
 }
 
 // Tells HR a signed copy has arrived, written as the employee's reply to their NDA email: the

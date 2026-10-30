@@ -74,8 +74,8 @@ test('Address: needs a 6-digit PIN code', () => {
   assert.match(V.rules.address('Kolkata').error, /15–300/);
 });
 
-test('Email is optional but must be valid when given', () => {
-  assert.deepEqual(plain(V.rules.email('')), { value: '' });
+test('Email is required and must be valid', () => {
+  assert.match(V.rules.email('').error, /Enter your email address/);
   assert.deepEqual(plain(V.rules.email(' Rahul@Example.COM ')), { value: 'rahul@example.com' });
   assert.ok(V.rules.email('rahul@').error);
 });
@@ -83,7 +83,7 @@ test('Email is optional but must be valid when given', () => {
 test('validateEmployee reports every bad field at once', () => {
   const result = V.validateEmployee({ fullName: 'Rahul Kumar', aadhaar: '123', pan: 'x' });
   assert.equal(result.ok, false);
-  assert.deepEqual(Object.keys(result.errors).sort(), ['aadhaar', 'address', 'mobile', 'pan']);
+  assert.deepEqual(Object.keys(result.errors).sort(), ['aadhaar', 'address', 'email', 'mobile', 'pan']);
   assert.equal(V.validateEmployee(null).ok, false);
 });
 

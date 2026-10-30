@@ -13,7 +13,7 @@ function employee(overrides) {
     aadhaar: AADHAAR.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3'),
     pan: 'abcpe1234f',
     mobile: '+91 98765 43210',
-    email: '',
+    email: 'rahul@example.com',
     confirmed: true,
   }, overrides);
 }
@@ -56,11 +56,14 @@ test('doGet serves the portal and allows framing by the Netlify page', () => {
 
 test('setup creates folders and the register once, and is safe to re-run', () => {
   const app = readyApp();
-  const first = Object.assign({}, app.props);
+  const { MAIL_CHECKED_UNTIL, ...first } = app.props;
+  assert.ok(MAIL_CHECKED_UNTIL, 'setup also runs a first check for emailed signed copies');
   assert.deepEqual(Object.keys(first).sort(), ['GENERATED_FOLDER_ID', 'ROOT_FOLDER_ID', 'SHEET_ID', 'SIGNED_FOLDER_ID']);
   assert.equal(app.sheetRows()[0][1], 'NDA Ref');
   app.call('setup');
-  assert.deepEqual(app.props, first);
+  const { MAIL_CHECKED_UNTIL: again, ...second } = app.props;
+  assert.deepEqual(second, first);
+  assert.deepEqual(app.triggers.map((t) => [t.getHandlerFunction(), t.minutes]), [['collectEmailedNdas', 15]], 'one 15-minute check, not two');
 });
 
 test('server functions explain when setup() has not been run', () => {
@@ -88,7 +91,8 @@ test('generateNda builds the PDF, files it, and logs a register row', () => {
   assert.match(res.ref, /^TAI-NDA-\d{6}-[2-9A-HJ-NP-Z]{5}$/);
   assert.equal(res.mobile, '9876543210');
   assert.equal(res.fileName, res.ref + ' - NDA - Rahul Kumar Das.pdf');
-  assert.equal(res.emailed, false);
+  assert.equal(res.emailed, true);
+  assert.match(app.mail[0].body, /Reply to this email with the signed pages attached/);
 
   const html = pdfHtml(res);
   assert.match(html, /Rahul Kumar Das/);
@@ -229,7 +233,7 @@ test('uploadSignedNda stores the pages, updates the register, and keeps re-uploa
   row = rowFor(app, ref);
   assert.equal(row['Signed Copy'].split('\n').length, 3);
   assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 3);
-  assert.equal(app.mail.length, 0, 'no HR email unless HR_EMAIL is set');
+  assert.deepEqual(app.mail.map((m) => m.to), ['rahul@example.com'], 'no HR email unless HR_EMAIL is set');
 });
 
 test('HR gets the signed copy as the employee\'s reply: their name, Reply-To them, pages attached', () => {
@@ -254,12 +258,14 @@ test('HR gets the signed copy as the employee\'s reply: their name, Reply-To the
   assert.match(mail.body, /Reply to this email to write to Rahul Kumar Das/);
 });
 
-test('without an employee email, HR still gets the pages, and replies come back to HR', () => {
+test('for an older NDA without an email, HR still gets the pages, and replies come back to HR', () => {
   const app = readyApp();
   app.eval("CONFIG.HR_EMAIL = 'hr@tagneticai.com'");
   const { ref } = app.call('generateNda', employee());
+  const header = app.sheetRows()[0];
+  app.sheetRows()[1][header.indexOf('Email')] = ''; // made before email was required
   app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(PDF_BYTES, 'application/pdf')] });
-  const mail = app.mail[0];
+  const mail = app.mail.find((m) => m.to === 'hr@tagneticai.com');
   assert.equal(mail.replyTo, undefined);
   assert.equal(mail.attachments.length, 1);
   assert.match(mail.body, /Email Id: not given/);
@@ -271,7 +277,7 @@ test('very large uploads are linked rather than attached, so the HR email still 
   const { ref } = app.call('generateNda', employee());
   const big = Buffer.concat([PDF_BYTES, Buffer.alloc(21 * 1024 * 1024)]);
   assert.equal(app.call('uploadSignedNda', { ref, mobile: '9876543210', files: [fileArg(big, 'application/pdf')] }).success, true);
-  const mail = app.mail[0];
+  const mail = app.mail.find((m) => m.to === 'hr@tagneticai.com');
   assert.equal(mail.attachments, undefined);
   assert.match(mail.body, /Saved in Drive:\nhttps:\/\/drive\.google\.com/);
 });
@@ -331,4 +337,91 @@ test('previewNda saves a sample PDF without touching the register', () => {
   assert.equal(generated.length, 1);
   assert.match(generated[0].name, /^PREVIEW - TAI-NDA-PREVIEW - NDA - Sample Employee\.pdf$/);
   assert.equal(app.sheetRows().length, 1);
+});
+
+// ---------- Signed copies returned by replying to the NDA email ----------
+
+function runScheduledCheck(app) {
+  app.context.collectEmailedNdas({ triggerUid: app.triggers[0].getUniqueId() });
+}
+
+function replyThread(app, ref, from, attachments, extra) {
+  return app.addEmailThread({
+    subject: 'Your TagneticAI NDA (' + ref + ')',
+    messages: [
+      { id: 'portal1', from: 'TagneticAI <protick.purkait.2001@gmail.com>', attachments: [{ name: 'nda.pdf', type: 'application/pdf', bytes: PDF_BYTES }] },
+      Object.assign({ id: 'reply1', from, date: new Date(Date.UTC(2026, 9, 30, 12, 0)), attachments }, extra),
+    ],
+  });
+}
+
+test('an employee\'s emailed reply is filed in Drive, marked in the register and labelled', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  const thread = replyThread(app, ref, 'Rahul Kumar Das <Rahul@Example.com>', [
+    { name: 'signed.pdf', type: 'application/pdf', bytes: PDF_BYTES },
+    { name: 'page2.jpg', type: 'application/octet-stream', bytes: JPEG_BYTES }, // type from the bytes, not the label
+    { name: 'notes.docx', type: 'application/vnd.openxmlformats', bytes: Buffer.from('PK\x03\x04 docx') },
+  ]);
+
+  runScheduledCheck(app);
+
+  const filed = app.filesIn('SIGNED_FOLDER_ID');
+  assert.deepEqual(filed.map((f) => f.name), [ref + '_emailed_reply1_1.pdf', ref + '_emailed_reply1_2.jpg']);
+  assert.deepEqual(filed.map((f) => f.blob.getContentType()), ['application/pdf', 'image/jpeg']);
+  const row = rowFor(app, ref);
+  assert.equal(row['Status'], 'Signed copy received');
+  assert.equal(row['Signed Copy'].split('\n').length, 2);
+  assert.equal(row['Signed At'], '2026-10-30 17:30:00');
+  assert.deepEqual(thread.labels, ['NDA filed']);
+
+  const query = app.gmailQueries[app.gmailQueries.length - 1];
+  assert.match(query, /^subject:"TAI-NDA" has:attachment -from:me after:\d+$/);
+});
+
+test('the same email is never filed twice, however often the check runs', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  replyThread(app, ref, 'rahul@example.com', [{ name: 'signed.pdf', type: 'application/pdf', bytes: PDF_BYTES }]);
+  runScheduledCheck(app);
+  runScheduledCheck(app);
+  app.call('setup'); // also checks
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 1);
+  assert.equal(rowFor(app, ref)['Signed Copy'].split('\n').length, 1);
+});
+
+test('replies from anyone other than the employee, or without real attachments, are left alone', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  const stranger = replyThread(app, ref, 'Someone <someone@example.com>', [{ name: 'x.pdf', type: 'application/pdf', bytes: PDF_BYTES }]);
+  const noFiles = replyThread(app, ref, 'rahul@example.com', [{ name: 'x.pdf', type: 'application/pdf', bytes: Buffer.from('not a pdf') }]);
+  const unknownRef = replyThread(app, 'TAI-NDA-000000-AAAAA', 'rahul@example.com', [{ name: 'x.pdf', type: 'application/pdf', bytes: PDF_BYTES }]);
+  runScheduledCheck(app);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
+  assert.equal(rowFor(app, ref)['Status'], 'Awaiting signed copy');
+  [stranger, noFiles, unknownRef].forEach((t) => assert.deepEqual(t.labels, []));
+});
+
+test('Gmail addresses match even when written with dots, capitals or a +tag', () => {
+  const app = readyApp();
+  assert.equal(app.context.mailboxOf_('Ranita Das <Ranita.Das+nda@Gmail.com>'), 'ranitadas@gmail.com');
+  assert.equal(app.context.mailboxOf_('ranitadas@googlemail.com'), 'ranitadas@gmail.com');
+  assert.equal(app.context.mailboxOf_('HR <first.last@tagneticai.com>'), 'first.last@tagneticai.com');
+  assert.equal(app.context.mailboxOf_(''), '');
+
+  const { ref } = app.call('generateNda', employee({ email: 'rahul.kumar@gmail.com' }));
+  replyThread(app, ref, 'Rahul <RahulKumar@gmail.com>', [{ name: 's.pdf', type: 'application/pdf', bytes: PDF_BYTES }]);
+  runScheduledCheck(app);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 1);
+});
+
+test('the scheduled check cannot be set off from the web page', () => {
+  const app = readyApp();
+  const { ref } = app.call('generateNda', employee());
+  replyThread(app, ref, 'rahul@example.com', [{ name: 's.pdf', type: 'application/pdf', bytes: PDF_BYTES }]);
+  app.call('collectEmailedNdas');
+  app.call('collectEmailedNdas', { triggerUid: 'guessed-id' });
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 0);
+  runScheduledCheck(app);
+  assert.equal(app.filesIn('SIGNED_FOLDER_ID').length, 1);
 });

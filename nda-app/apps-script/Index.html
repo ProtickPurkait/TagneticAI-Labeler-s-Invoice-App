@@ -65,8 +65,8 @@
           </div>
         </div>
         <div class="col-md-6">
-          <label class="form-label" for="email">Email <span class="text-muted">(optional)</span></label>
-          <input type="email" class="form-control" id="email" name="email" autocomplete="email" placeholder="To receive a copy by email">
+          <label class="form-label" for="email">Email</label>
+          <input type="email" class="form-control" id="email" name="email" autocomplete="email" placeholder="Your NDA is emailed here">
           <div class="invalid-feedback"></div>
         </div>
       </div>
@@ -90,7 +90,7 @@
         <div class="mb-1">🎉 <strong>Your NDA is ready.</strong> Your reference number is:</div>
         <div class="ref-box fw-bold" id="resultRef"></div>
         <div class="small mt-1">Note it down. You need it, with your mobile number, to upload the signed copy.</div>
-        <div class="small mt-1 d-none" id="resultEmailed">✉️ A copy has also been emailed to you.</div>
+        <div class="small mt-1 d-none" id="resultEmailed">✉️ We've also emailed it to you. Once it's signed, just reply to that email with the signed pages attached.</div>
       </div>
       <a id="downloadLink" class="btn btn-success w-100 py-3 fs-5 mb-3" href="#">⬇️ Download NDA (PDF)</a>
 
@@ -99,7 +99,8 @@
         <li>Print all pages on A4 paper and read the agreement fully.</li>
         <li>Sign above <em>Signature:</em> under <em>Receiving Party</em> on the last page.</li>
         <li>Initial the bottom of every page. Use blue or black ink.</li>
-        <li>Scan every page, or photograph each page flat and in good light, then upload below.</li>
+        <li>Scan every page, or photograph each page flat and in good light.</li>
+        <li>Reply to the email we sent you with the signed pages attached, or upload them below.</li>
       </ol>
       <p class="small text-muted mt-2 mb-0">Spotted a mistake? Correct it above and generate again. Then upload using the <strong>newest</strong> reference number.</p>
     </div>
@@ -109,7 +110,7 @@
     <!-- Step 3: signed copy upload -->
     <form id="uploadForm" novalidate>
       <h5 class="mb-3 text-primary">3. Upload Your Signed NDA</h5>
-      <p class="text-muted small">Already signed? Enter the reference number printed at the top of your NDA, the mobile number you gave for it, and the scanned pages.</p>
+      <p class="text-muted small">Can't reply by email? Upload here instead: enter the reference number printed at the top of your NDA, the mobile number you gave for it, and the scanned pages.</p>
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label" for="uploadRef">NDA Reference Number</label>

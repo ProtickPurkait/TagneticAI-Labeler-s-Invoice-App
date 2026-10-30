@@ -86,11 +86,11 @@ function buildValidators_() {
       return { value: v };
     },
 
-    // Optional: only used to email the employee a copy.
+    // The NDA is emailed here, and the employee returns it by replying from this address.
     email: function (raw) {
       var v = String(raw == null ? '' : raw).trim();
-      if (!v) return { value: '' };
-      if (v.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return { error: 'Enter a valid email address, or leave it blank.' };
+      if (!v) return { error: 'Enter your email address. Your NDA is sent there.' };
+      if (v.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return { error: 'Enter a valid email address.' };
       return { value: v.toLowerCase() };
     },
   };

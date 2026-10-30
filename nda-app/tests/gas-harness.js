@@ -48,6 +48,10 @@ function createApp() {
   const files = new Map(); // id -> folder or file record
   const spreadsheets = new Map();
   const mail = [];
+  const mailbox = []; // Gmail threads, see addEmailThread()
+  const gmailQueries = [];
+  const labels = new Map();
+  const triggers = [];
   const logs = [];
   let context;
 
@@ -80,6 +84,12 @@ function createApp() {
         const file = makeFile(blob.getName(), this.id);
         file.blob = blob;
         return file;
+      },
+      searchFiles(query) {
+        const m = /^title contains "(.*)"$/.exec(query);
+        if (!m) throw new Error('Unsupported Drive query: ' + query);
+        const found = Array.from(files.values()).filter((f) => !f.isFolder && f.parentId === this.id && f.name.includes(m[1]));
+        return { hasNext: () => found.length > 0, next: () => found.shift() };
       },
     };
     files.set(folder.id, folder);
@@ -220,6 +230,28 @@ function createApp() {
     MailApp: {
       sendEmail(...args) { mail.push(args.length === 1 ? args[0] : Object.assign({ to: args[0], subject: args[1], body: args[2] }, args[3])); },
     },
+    // search() returns every thread in the mailbox; the query is recorded for tests to check.
+    GmailApp: {
+      search(query) { gmailQueries.push(query); return mailbox.slice(); },
+      getUserLabelByName: (name) => labels.get(name) || null,
+      createLabel(name) { const label = { getName: () => name }; labels.set(name, label); return label; },
+    },
+    ScriptApp: {
+      getProjectTriggers: () => triggers.slice(),
+      newTrigger(handler) {
+        const spec = { handler, minutes: null };
+        const builder = {
+          timeBased() { return builder; },
+          everyMinutes(n) { spec.minutes = n; return builder; },
+          create() {
+            const trigger = { id: newId('trigger'), getHandlerFunction: () => handler, getUniqueId: () => trigger.id, minutes: spec.minutes };
+            triggers.push(trigger);
+            return trigger;
+          },
+        };
+        return builder;
+      },
+    },
     Utilities: {
       newBlob: (data, type, name) => new Blob(data, type, name),
       base64Encode: (bytes) => Buffer.from(bytes.map((b) => b & 0xff)).toString('base64'),
@@ -265,6 +297,28 @@ function createApp() {
     call(name, arg) {
       const result = context[name](arg === undefined ? undefined : JSON.parse(JSON.stringify(arg)));
       return result === undefined ? undefined : JSON.parse(JSON.stringify(result));
+    },
+    triggers,
+    mailbox,
+    gmailQueries,
+    /**
+     * Adds a Gmail conversation: { subject, messages: [{ from, date, attachments: [{ name, type, bytes }] }] }.
+     * Returns the thread, whose .labels lists the labels added to it.
+     */
+    addEmailThread({ subject, messages }) {
+      const thread = {
+        labels: [],
+        getFirstMessageSubject: () => subject,
+        getMessages: () => messages.map((m, i) => ({
+          getId: () => m.id || 'msg' + (mailbox.indexOf(thread) + 1) + '_' + (i + 1),
+          getFrom: () => m.from,
+          getDate: () => m.date || new Date(),
+          getAttachments: () => (m.attachments || []).map((a) => new Blob(Buffer.from(a.bytes), a.type, a.name)),
+        })),
+        addLabel(label) { thread.labels.push(label.getName()); return thread; },
+      };
+      mailbox.push(thread);
+      return thread;
     },
     /** Puts a file in "Drive" (e.g. a signature image) and returns its ID. */
     addFile(name, bytes, type) {
